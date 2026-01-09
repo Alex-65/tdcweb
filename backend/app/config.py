@@ -15,6 +15,7 @@ class Config:
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
+    FLASK_PORT = int(os.environ.get('FLASK_PORT', 9502))
 
     # Database
     DB_HOST = os.environ.get('DB_HOST', 'localhost')

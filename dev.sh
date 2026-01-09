@@ -13,14 +13,14 @@ set -e
 # ============================================
 # Configuration
 # ============================================
-PROJECT_ROOT="/data1/tdcweb"
+PROJECT_ROOT="/data1/tdcweb-dev"
 BACKEND_DIR="$PROJECT_ROOT/backend"
 FRONTEND_DIR="$PROJECT_ROOT/frontend"
 PID_DIR="$PROJECT_ROOT/.pids"
 LOG_DIR="$PROJECT_ROOT/.logs"
 
-BACKEND_PORT=9500
-FRONTEND_PORT=9501
+BACKEND_PORT=9502
+FRONTEND_PORT=9503
 
 BACKEND_PID_FILE="$PID_DIR/backend.pid"
 FRONTEND_PID_FILE="$PID_DIR/frontend.pid"
