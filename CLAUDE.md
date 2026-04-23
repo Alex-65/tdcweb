@@ -15,6 +15,10 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
+15. **SUBAGENT TASK WORKFLOW** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) report results; (d) **STOP and wait for user checkpoint** before dispatching next task. No batching tasks silently.
+16. **PHASE-END TRIPLE REVIEW** → At the end of EACH phase: (a) **spec review** — cross-check the implementation against the spec/requirements; (b) **code review** — quality, correctness, conventions, security; (c) **design review** — if a design doc exists, verify implementation matches it. THEN run **real tests** (E2E, integration, performance — not only smoke tests). Only then the phase is complete.
+17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
+18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during phase-end triple review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
 
 ---
 
@@ -84,6 +88,81 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 - Trial-and-error hoping something sticks
 
 **IRON RULE**: *If you haven't seen debug output proving what's wrong, you don't know what's wrong. PERIOD.*
+
+## 📋 SUBAGENT-DRIVEN IMPLEMENTATION WORKFLOW - MANDATORY
+
+**🔴 When implementing any plan in subagent-driven mode, this is the non-negotiable protocol.**
+
+### Per-task loop
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  1. DISPATCH subagent for the next task in the plan             │
+│     └─ pass: task spec + relevant context files                  │
+│                                                                  │
+│  2. Subagent EXECUTES the task                                   │
+│     └─ produces code + commits per the task's step list          │
+│                                                                  │
+│  3. RUN ALL TESTS                                                │
+│     ├─ Backend:  pytest (all markers, respecting fixtures)      │
+│     ├─ Frontend: npm test (vitest, all spec files)              │
+│     └─ Integration: if the task touches a boundary              │
+│                                                                  │
+│  4. CREATE MISSING TESTS                                         │
+│     ├─ For any new code lacking tests (backend & frontend)      │
+│     ├─ Unit tests for pure logic                                 │
+│     ├─ Integration tests for cross-layer code                    │
+│     └─ Tests committed alongside the code                        │
+│                                                                  │
+│  5. CHECKPOINT                                                   │
+│     ├─ Report: what was done, tests run, tests created, diffs   │
+│     └─ STOP — wait for user approval to proceed to next task    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Per-phase triple review (at the end of every phase)
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  A. SPEC REVIEW                                                  │
+│     └─ Does the phase implementation fulfill the spec's          │
+│        requirements for this phase? Any requirement unmet?       │
+│                                                                  │
+│  B. CODE REVIEW                                                  │
+│     ├─ Correctness, edge cases, error handling                   │
+│     ├─ Conventions (CLAUDE.md rules, file size, typing)          │
+│     ├─ Security (XSS, secrets, auth flow, input validation)      │
+│     └─ Performance anti-patterns                                 │
+│                                                                  │
+│  C. DESIGN REVIEW (if a design doc exists for the phase)         │
+│     └─ Does the implementation match the architectural intent?   │
+│                                                                  │
+│  D. REAL TESTS (not just smoke tests)                            │
+│     ├─ Full E2E journeys (Playwright)                            │
+│     ├─ Integration tests (cross-service)                         │
+│     ├─ Performance sanity (LCP, bundle size, query timing)      │
+│     └─ Security smoke: auth boundaries, cookie flags, CSP       │
+│                                                                  │
+│  E. TEST STATE CLEANUP                                           │
+│     ├─ Identify what tests wrote (DB rows, files, external)     │
+│     ├─ Restore to pre-test state                                 │
+│     └─ Verify cleanup with a query/listing                       │
+│                                                                  │
+│  F. PHASE CHECKPOINT                                             │
+│     ├─ Report all four reviews + real test results + cleanup    │
+│     └─ STOP — wait for user approval before next phase          │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Hard rules
+
+- **Never skip steps 3-4** of the per-task loop. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
+- **Never skip the triple review**. "The code looks fine" is not a substitute.
+- **Tests come WITH the code**, committed together. No "I'll write tests later".
+- **DB/filesystem state after tests = DB/filesystem state before tests.** Always. This is enforced, not aspirational.
+- **Possible additional review post-phase**: the user may request an extra review at some point after the phase closes. Treat it as a normal ad-hoc deliverable when it comes.
+
+---
 
 ## 🔴 FIX-TEST-VERIFY METHODOLOGY - ABSOLUTE RULE
 
@@ -206,7 +285,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ### 🏗️ Core Development Team (7)
 - **tdc-database-expert**: MySQL schema, migrations, queries (NO SQLAlchemy)
 - **tdc-api-expert**: RESTful endpoints, validation, Second Life API
-- **tdc-frontend-expert**: Vue.js 3, TypeScript, Tailwind CSS, GSAP/ScrollTrigger
+- **tdc-frontend-expert**: Nuxt 4, Vue 3, TypeScript, Tailwind CSS, GSAP/ScrollTrigger/Lenis, SSR/SSG/ISR, BFF server routes
 - **tdc-backend-expert**: Flask architecture, business logic, services
 - **tdc-auth-expert**: Authentication, OAuth2, JWT, sessions, RBAC
 - **tdc-integration-expert**: Google Calendar, Facebook, Patreon, Second Life API
@@ -259,19 +338,61 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 |-------|------------|
 | **Backend** | Python 3.11+ / Flask |
 | **Database** | MySQL 8.x with mysql-connector-python (NO SQLAlchemy) |
-| **Frontend** | Vue.js 3 (Composition API) + Vite |
-| **Styling** | Tailwind CSS |
-| **Animations** | GSAP + ScrollTrigger + Lenis |
-| **State** | Pinia |
-| **i18n** | Vue I18n (EN, IT, FR, ES) |
-| **Auth** | Flask-Login + JWT + OAuth2 (Google, Discord, Facebook) |
+| **Frontend** | **Nuxt 4** (Vue 3 Composition API) + Vite + **TypeScript (strict)** |
+| **Frontend ports** | Dev `:9503`, Prod `:9501` (node SSR server) |
+| **Backend ports** | Dev `:9502`, Prod `:9500` (gunicorn) |
+| **Styling** | Tailwind CSS + CSS variables (per-location theming) |
+| **Animations** | GSAP + ScrollTrigger + Lenis (client-only `.client.ts` plugins) |
+| **State** | Pinia via `@pinia/nuxt` |
+| **i18n** | `@nuxtjs/i18n` — `prefix_except_default`, EN default, `/it/ /fr/ /es/` |
+| **SEO** | `@nuxtjs/seo` + `@nuxtjs/sitemap` + `@nuxtjs/robots` (useSeoMeta, useSchemaOrg) |
+| **Image** | `@nuxt/image` (`<NuxtImg>`, auto avif/webp) |
+| **Forms** | vee-validate + zod (same schema client+server via `readValidatedBody`) |
+| **Rich text** | `@tiptap/vue-3` (admin-only, `<ClientOnly>`-wrapped) |
+| **Auth transport** | **JWT HttpOnly cookies** (`tdc_access` 15min Lax, `tdc_refresh` 7d Strict Path=/api/auth, rotated on use) |
+| **Auth emit** | Flask + JWT + OAuth2 (Google, Discord, Facebook) |
+| **BFF** | Nuxt `server/api/auth/**` + `server/api/revalidate` (auth cookie handling + on-demand ISR). All other `/api/**` proxy to Flask. |
 | **Task Queue** | Celery + Redis |
+| **Testing** | vitest + `@nuxt/test-utils` + happy-dom (unit/component); Playwright (E2E, 1920x1080) |
 
 ### External Integrations
 - **Google Calendar**: Staff + Public event calendars
 - **Facebook**: Page + Group posting
 - **Patreon**: Supporter management, webhooks, exclusive content
 - **Second Life**: In-world API for event displays
+
+### 🎬 Rendering Strategy (per-route, via `routeRules` in `nuxt.config.ts`)
+
+| Route pattern | Strategy | TTL / Notes |
+|---|---|---|
+| `/`, `/about`, `/contact` | **SSG** (`prerender: true`) | Build-time; rare changes |
+| `/locations`, `/locations/**` | **SSG** + on-demand revalidate | 10 fixed venues, admin-edited |
+| `/artists`, `/artists/**` | **SSG** + on-demand revalidate | Few changes |
+| `/events`, `/events/**` | **ISR** (`swr: 300`) | 5 min stale-while-revalidate |
+| `/blog`, `/blog/**` | **ISR** (`swr: 3600`) + on-demand | 1h + instant-publish via revalidate |
+| `/auth/login`, `/auth/register`, `/auth/callback/**` | **SSR** (no cache) | Dynamic per session |
+| `/dashboard/**`, `/admin/**` | **SPA** (`ssr: false`) | Auth-gated, no SEO value |
+| `/api/auth/**`, `/api/revalidate` | Nitro server routes (BFF) | Handled by Nuxt node |
+| `/api/**` (other) | Proxied to Flask | via nginx (prod) or Nitro devProxy (dev) |
+
+**On-demand revalidation**: admin save → client POSTs `/api/revalidate { path }` → Nitro clears cache for that path → next visitor gets fresh content.
+
+### 🔒 SSR Client-Only Rules (NON-NEGOTIABLE)
+
+1. **GSAP + ScrollTrigger** → only in `*.client.ts` plugins. Use `gsap.context()` + `ctx.revert()` on `onBeforeUnmount`, else ScrollTrigger leaks across navigations and breaks scroll.
+2. **Lenis** → only in `app/plugins/lenis.client.ts`. Sync with `gsap.ticker.add(lenis.raf)` — NEVER a separate `requestAnimationFrame` loop. Stop on `/admin/*` and `/dashboard/*`.
+3. **Browser globals** (`window`, `document`, `localStorage`, `sessionStorage`, `matchMedia`, `IntersectionObserver`, `ResizeObserver`) → forbidden in `setup()` top-level. Use `onMounted()` or `.client.ts` files.
+4. **Hydration-mismatch generators in templates** (`new Date()`, `Math.random()`, `crypto.randomUUID()`, `navigator.language`) → forbidden. Use ref + `onMounted` to set, or `<ClientOnly>` with matching-shape `#fallback`.
+5. **TipTap / canvas / WebGL** → always inside `<ClientOnly>` with a matching-shape fallback, or in a page with `ssr: false`.
+6. **Location theming** → `useHead({ bodyAttrs: { 'data-location': slug } })` + CSS vars in `app/assets/css/main.css`. Zero-JS at paint, SSR-safe.
+7. **Auth tokens in cookies only** → `httpOnly: true, secure: prod, sameSite: 'lax'/'strict'`. NEVER in `localStorage`, NEVER readable by JS.
+
+**References**:
+- Deep spec: `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
+- Frontend playbook: `docs/frontend/nuxt-playbook.md`
+- Project plan v3: `docs/plans/pdp-v3.md` (created during migration)
+- v2 (historical): `docs/plans/pdp-v2.md`
 
 ## 💬 Communication Style - CRITICAL
 **🔴 BE DIRECT AND HONEST - NO EMPTY PRAISE**
@@ -480,7 +601,7 @@ Each location has a unique visual identity using CSS variables:
 // composables/useScrollAnimation.js
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import Lenis from '@studio-freight/lenis'
+import Lenis from 'lenis'
 
 gsap.registerPlugin(ScrollTrigger)
 
