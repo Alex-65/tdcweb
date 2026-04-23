@@ -39,6 +39,7 @@
     "@nuxt/test-utils": "^4.0.2",
     "@playwright/test": "^1.59.1",
     "happy-dom": "^20.9.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }
 }

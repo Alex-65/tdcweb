@@ -29,37 +29,6 @@ buffer for deferred work.
 
 ## Open items
 
-### 🟡 TD-001 · TypeScript not explicit in devDependencies
-
-- **Source:** Phase 1 triple review (2026-04-23)
-- **Issue:** `frontend/package.json` has no explicit `typescript`
-  devDependency. TypeScript 6.0.3 is present transitively via
-  `@nuxtjs/i18n`, `@nuxt/ui`, `nuxt` itself. `tsc` works via `npx`.
-- **Why it's open:** functional now, but a transitive version is a
-  ticking bomb — any module bump could shift the resolved TS version
-  silently.
-- **Impact:** medium. No immediate breakage. Risk of inconsistent TS
-  errors across dev environments over time.
-- **Resolution trigger:** Task 2.1 (core nuxt.config.ts + tsconfig.json
-  setup). Add `npm install -D typescript@^6` at that step.
-- **Close when:** `typescript` appears as a direct `devDependency` in
-  `frontend/package.json`.
-
-### 🟡 TD-002 · `compatibilityDate` is scaffold default
-
-- **Source:** Phase 1 triple review (2026-04-23)
-- **Issue:** `frontend/nuxt.config.ts` was created by `nuxi init` with
-  `compatibilityDate: '2025-07-15'`. The migration spec/plan specifies
-  `'2026-04-01'` to opt into current Nuxt 4.x runtime behavior.
-- **Why it's open:** will be rewritten as part of the full
-  `nuxt.config.ts` replacement in Task 2.1.
-- **Impact:** low. Some Nuxt 4 features shipped after 2025-07-15 may
-  not be fully enabled until the date bumps.
-- **Resolution trigger:** Task 2.1 — the new `nuxt.config.ts` block
-  in the plan uses `'2026-04-01'`.
-- **Close when:** `grep compatibilityDate frontend/nuxt.config.ts`
-  shows `'2026-04-01'` (or later).
-
 ### 🟢 TD-003 · `zod` pinned to v3 due to `@vee-validate/zod` peer
 
 - **Source:** Task 1.4 (commit 2091253, 2026-04-23)
@@ -121,7 +90,41 @@ buffer for deferred work.
 
 ## Closed items
 
-*(nothing yet — Phase 1 just completed)*
+### 🟡 TD-001 · TypeScript not explicit in devDependencies
+
+- **Source:** Phase 1 triple review (2026-04-23)
+- **Issue:** `frontend/package.json` has no explicit `typescript`
+  devDependency. TypeScript 6.0.3 is present transitively via
+  `@nuxtjs/i18n`, `@nuxt/ui`, `nuxt` itself. `tsc` works via `npx`.
+- **Why it's open:** functional now, but a transitive version is a
+  ticking bomb — any module bump could shift the resolved TS version
+  silently.
+- **Impact:** medium. No immediate breakage. Risk of inconsistent TS
+  errors across dev environments over time.
+- **Resolution trigger:** Task 2.1 (core nuxt.config.ts + tsconfig.json
+  setup). Add `npm install -D typescript@^6` at that step.
+- **Close when:** `typescript` appears as a direct `devDependency` in
+  `frontend/package.json`.
+- **Closed:** 2026-04-23 · commit <this commit> (Task 2.1) — installed
+  `typescript@^6.0.3` as explicit `devDependency` in
+  `frontend/package.json`.
+
+### 🟡 TD-002 · `compatibilityDate` is scaffold default
+
+- **Source:** Phase 1 triple review (2026-04-23)
+- **Issue:** `frontend/nuxt.config.ts` was created by `nuxi init` with
+  `compatibilityDate: '2025-07-15'`. The migration spec/plan specifies
+  `'2026-04-01'` to opt into current Nuxt 4.x runtime behavior.
+- **Why it's open:** will be rewritten as part of the full
+  `nuxt.config.ts` replacement in Task 2.1.
+- **Impact:** low. Some Nuxt 4 features shipped after 2025-07-15 may
+  not be fully enabled until the date bumps.
+- **Resolution trigger:** Task 2.1 — the new `nuxt.config.ts` block
+  in the plan uses `'2026-04-01'`.
+- **Close when:** `grep compatibilityDate frontend/nuxt.config.ts`
+  shows `'2026-04-01'` (or later).
+- **Closed:** 2026-04-23 · commit <this commit> (Task 2.1) — full
+  `nuxt.config.ts` rewrite landed with `compatibilityDate: '2026-04-01'`.
 
 ---
 
