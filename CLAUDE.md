@@ -15,8 +15,8 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
-15. **SUBAGENT TASK WORKFLOW** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) report results; (d) **STOP and wait for user checkpoint** before dispatching next task. No batching tasks silently.
-16. **PHASE-END TRIPLE REVIEW** → At the end of EACH phase: (a) **spec review** — cross-check the implementation against the spec/requirements; (b) **code review** — quality, correctness, conventions, security; (c) **design review** — if a design doc exists, verify implementation matches it. THEN run **real tests** (E2E, integration, performance — not only smoke tests). Only then the phase is complete.
+15. **SUBAGENT TASK WORKFLOW** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) dispatch **`tdc-code-reviewer`** for spec + code quality review; (d) if the task modified UI, ALSO dispatch **`tdc-design-system-enforcer`** for visual compliance; (e) report results; (f) **STOP and wait for user checkpoint** before dispatching next task. No batching tasks silently.
+16. **PHASE-END TRIPLE REVIEW** → At the end of EACH phase, dispatch the Review Guardians: (a) **`tdc-code-reviewer`** Phase 1 — spec compliance across the whole phase; (b) **`tdc-code-reviewer`** Phase 2 — code quality / security / conventions / verification evidence; (c) **`tdc-design-system-enforcer`** — visual compliance for any UI changes in the phase. THEN run **real tests** (E2E, integration, performance — not only smoke tests). Only then the phase is complete. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during phase-end triple review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
 
@@ -305,6 +305,12 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **tdc-network-expert**: Network diagnostics, connection pools
 - **tdc-troubleshooting-expert**: Debugging, log analysis
 - **tdc-problem-isolator**: Problem mapping and scope isolation
+
+### 🛡️ Review Guardians (3)
+**Mandatory review gates. Invoked via CLAUDE.md rules 15 and 16.**
+- **tdc-design-enforcer**: Pre-implementation gate. Requires approved spec at `docs/superpowers/specs/*-design.md` BEFORE any code is written. Integrates with `superpowers:brainstorming` + `superpowers:writing-plans`.
+- **tdc-code-reviewer**: Post-implementation two-phase review. Phase 1 spec compliance, Phase 2 code quality + security + TDC conventions + verification evidence. Blocks merge.
+- **tdc-design-system-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens). Blocks UI merge.
 
 ### 🧠 Coordination (2)
 - **tdc-orchestrator**: Master coordinator for complex workflows

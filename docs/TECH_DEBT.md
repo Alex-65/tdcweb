@@ -101,6 +101,34 @@ buffer for deferred work.
 
 ---
 
+### 🟡 TD-007 · Consolidated `docs/DESIGN.md` missing
+
+- **Source:** tdc-design-system-enforcer agent creation (2026-04-23).
+- **Issue:** TDC does not have a single authoritative visual-identity
+  document. The design system currently lives fragmented across:
+  - `CLAUDE.md` (Technology Stack + Location Theming + SSR rules)
+  - `docs/frontend/nuxt-playbook.md` §14 (Tailwind + theming)
+  - `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md` §9.6, §10
+  - `.claude/agents/tdc-frontend-expert.md` (Quick Snippets, Location Theming)
+  - `frontend/app/assets/css/main.css` (CSS vars when Task 2.3 lands)
+- **Why it's open:** writing a full design system now would require
+  product-level decisions (typography scale beyond Inter, spacing scale,
+  full per-location palettes with contrast verification, motion tokens)
+  that haven't been made yet. Premature consolidation risks locking in
+  placeholders.
+- **Impact:** medium. `tdc-design-system-enforcer` has to re-read
+  fragmented sources every review. A consolidated doc would be faster
+  and clearer. Gap scales as the project grows.
+- **Resolution trigger:** by end of Phase 4 implementation, enough UI
+  will exist to codify the full system. Alternatively, when the user
+  invests a dedicated design pass to lock tokens/scales.
+- **Close when:** `docs/DESIGN.md` exists with: full token table,
+  10 per-location palettes with contrast checks, typography scale,
+  spacing scale, motion tokens, component catalogue. The enforcer agent
+  is updated to point at `docs/DESIGN.md` as its single source of truth.
+
+---
+
 ### 🟢 TD-005 · Transitive deprecation warnings in npm
 
 - **Source:** Tasks 1.3 and 1.4
