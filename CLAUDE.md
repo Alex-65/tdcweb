@@ -15,8 +15,8 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
-15. **SUBAGENT TASK WORKFLOW** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) dispatch **`tdc-code-reviewer`** for spec + code quality review; (d) if the task modified UI, ALSO dispatch **`tdc-design-system-enforcer`** for visual compliance; (e) report results; (f) **STOP and wait for user checkpoint** before dispatching next task. No batching tasks silently.
-16. **PHASE-END TRIPLE REVIEW** → At the end of EACH phase, dispatch the Review Guardians: (a) **`tdc-code-reviewer`** Phase 1 — spec compliance across the whole phase; (b) **`tdc-code-reviewer`** Phase 2 — code quality / security / conventions / verification evidence; (c) **`tdc-design-system-enforcer`** — visual compliance for any UI changes in the phase. THEN run **real tests** (E2E, integration, performance — not only smoke tests). Only then the phase is complete. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
+15. **SUBAGENT TASK WORKFLOW (no-commit model)** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) dispatch **`tdc-code-reviewer`** for spec + code quality review; (d) if the task modified UI, ALSO dispatch **`tdc-design-system-enforcer`** for visual compliance; (e) report results; (f) **STOP and wait for user checkpoint** before dispatching next task. **NO COMMITS at task level** — code accumulates in the working tree until phase end (rule 16). Implementer subagents must NOT commit; controller handles commits at phase boundary. This aligns with the user's practice of committing only when documentation is simultaneously updated.
+16. **PHASE-END COMMIT PROTOCOL** → At the end of EACH phase, in order: (a) **triple review** — dispatch `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **dispatch `tdc-documentation-expert`** to analyze the phase's git diff and update ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during phase-end triple review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
 
@@ -93,15 +93,17 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 **🔴 When implementing any plan in subagent-driven mode, this is the non-negotiable protocol.**
 
-### Per-task loop
+### Per-task loop (no commits)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  1. DISPATCH subagent for the next task in the plan             │
 │     └─ pass: task spec + relevant context files                  │
+│     └─ explicit instruction: DO NOT commit                       │
 │                                                                  │
 │  2. Subagent EXECUTES the task                                   │
-│     └─ produces code + commits per the task's step list          │
+│     └─ produces code + tests per the task's step list            │
+│     └─ does NOT run `git commit`                                 │
 │                                                                  │
 │  3. RUN ALL TESTS                                                │
 │     ├─ Backend:  pytest (all markers, respecting fixtures)      │
@@ -112,54 +114,77 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │     ├─ For any new code lacking tests (backend & frontend)      │
 │     ├─ Unit tests for pure logic                                 │
 │     ├─ Integration tests for cross-layer code                    │
-│     └─ Tests committed alongside the code                        │
 │                                                                  │
-│  5. CHECKPOINT                                                   │
-│     ├─ Report: what was done, tests run, tests created, diffs   │
+│  5. DISPATCH tdc-code-reviewer (and tdc-design-system-enforcer   │
+│     if UI changes). Fix issues before proceeding.                │
+│                                                                  │
+│  6. CHECKPOINT                                                   │
+│     ├─ Report: what was done, tests run, tests created, diffs,  │
+│     │         review verdicts                                    │
 │     └─ STOP — wait for user approval to proceed to next task    │
+│                                                                  │
+│  Code remains uncommitted in the working tree. Commits happen   │
+│  only at phase end (rule 16).                                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Per-phase triple review (at the end of every phase)
+### Per-phase commit protocol (at the end of every phase)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  A. SPEC REVIEW                                                  │
-│     └─ Does the phase implementation fulfill the spec's          │
-│        requirements for this phase? Any requirement unmet?       │
+│  A. SPEC + CODE REVIEW (via tdc-code-reviewer, 2 phases)         │
+│     ├─ Phase 1: spec compliance across the whole phase           │
+│     └─ Phase 2: code quality / security / conventions /          │
+│        verification evidence                                     │
 │                                                                  │
-│  B. CODE REVIEW                                                  │
-│     ├─ Correctness, edge cases, error handling                   │
-│     ├─ Conventions (CLAUDE.md rules, file size, typing)          │
-│     ├─ Security (XSS, secrets, auth flow, input validation)      │
-│     └─ Performance anti-patterns                                 │
+│  B. DESIGN-SYSTEM REVIEW (via tdc-design-system-enforcer)        │
+│     └─ Visual compliance for UI changes in this phase            │
+│        (dark theme, location CSS vars, Tailwind tokens, GSAP     │
+│        discipline, typography, spacing)                          │
 │                                                                  │
-│  C. DESIGN REVIEW (if a design doc exists for the phase)         │
-│     └─ Does the implementation match the architectural intent?   │
-│                                                                  │
-│  D. REAL TESTS (not just smoke tests)                            │
-│     ├─ Full E2E journeys (Playwright)                            │
+│  C. REAL TESTS (not just smoke tests)                            │
+│     ├─ Full E2E journeys (Playwright, 1920x1080)                 │
 │     ├─ Integration tests (cross-service)                         │
-│     ├─ Performance sanity (LCP, bundle size, query timing)      │
-│     └─ Security smoke: auth boundaries, cookie flags, CSP       │
+│     ├─ Performance sanity (LCP, bundle size, query timing)       │
+│     └─ Security smoke: auth boundaries, cookie flags, CSP        │
 │                                                                  │
-│  E. TEST STATE CLEANUP                                           │
-│     ├─ Identify what tests wrote (DB rows, files, external)     │
+│  D. TEST STATE CLEANUP                                           │
+│     ├─ Identify what tests wrote (DB rows, files, external)      │
 │     ├─ Restore to pre-test state                                 │
 │     └─ Verify cleanup with a query/listing                       │
 │                                                                  │
-│  F. PHASE CHECKPOINT                                             │
-│     ├─ Report all four reviews + real test results + cleanup    │
-│     └─ STOP — wait for user approval before next phase          │
+│  E. DOCUMENTATION SYNC (via tdc-documentation-expert)            │
+│     ├─ Analyze git diff for the phase                            │
+│     ├─ Update EVERY impacted doc per the Impact Matrix           │
+│     ├─ CREATE missing docs where needed                          │
+│     ├─ Validate link integrity + stack-reference currency        │
+│     └─ Return report (staging recommendation + commit message)   │
+│                                                                  │
+│  F. ATOMIC COMMIT(S)                                             │
+│     ├─ Code + docs committed together                            │
+│     ├─ One commit, or a small set of logically-grouped commits   │
+│     ├─ NEVER docs-only or code-only commits at phase boundary    │
+│     └─ Commit message references spec + plan + SHA range         │
+│                                                                  │
+│  G. PHASE CHECKPOINT                                             │
+│     ├─ Report all reviews + real test results + cleanup +        │
+│     │   docs sync + commit SHAs                                  │
+│     └─ STOP — wait for user approval before next phase           │
+│                                                                  │
+│  Push to remote happens ONLY with explicit user authorization,   │
+│  never automatically.                                            │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ### Hard rules
 
-- **Never skip steps 3-4** of the per-task loop. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
-- **Never skip the triple review**. "The code looks fine" is not a substitute.
-- **Tests come WITH the code**, committed together. No "I'll write tests later".
+- **Never skip steps 3-5** of the per-task loop. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
+- **Never skip the phase-end review + docs sync**. "The code looks fine" is not a substitute.
+- **Tests come WITH the code**. They land in the same phase-end commit as the feature they cover. No "I'll write tests later".
 - **DB/filesystem state after tests = DB/filesystem state before tests.** Always. This is enforced, not aspirational.
+- **Docs land WITH code at phase end.** There are no docs-only commits at phase boundary. If docs drift during a phase, it's caught and corrected by `tdc-documentation-expert` before the phase commit.
+- **No per-task commits.** Subagents produce code + tests in the working tree; the controller commits only at phase boundary. Aligns with the user's practice of committing only alongside documentation updates.
+- **Push is always explicit.** `tdc-documentation-expert` and every other agent never push. Pushes happen only when the user explicitly authorizes each one.
 - **Possible additional review post-phase**: the user may request an extra review at some point after the phase closes. Treat it as a normal ad-hoc deliverable when it comes.
 
 ---
