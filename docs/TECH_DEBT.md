@@ -67,6 +67,40 @@ buffer for deferred work.
 - **Close when:** `grep -rn '@studio-freight/lenis'
   .claude/skills/` returns nothing.
 
+### 🟡 TD-006 · Task 2.3 plan needs rework for Tailwind v4 (CSS-first config)
+
+- **Source:** Task 2.1 follow-up fix (2026-04-23), discovered at dev-boot smoke test.
+- **Issue:** The plan prescribes a `tailwind.config.ts` (Tailwind v3
+  pattern) wired via `@nuxtjs/tailwindcss`. But `@nuxt/ui` and
+  `nuxt-og-image` (transitively pulled by `@nuxtjs/seo`) drag in
+  `tailwindcss@4.x`. `@nuxtjs/tailwindcss@6` doesn't support v4 → dev
+  boot fails with "PostCSS plugin has moved to separate package."
+- **Fix applied inline:** Removed `@nuxtjs/tailwindcss` module, added
+  `@tailwindcss/vite` as explicit dependency, wired Vite plugin in
+  `nuxt.config.ts`, created stub `app/assets/css/main.css` with
+  `@import "tailwindcss";`. Dev boots clean, `/` returns 200.
+- **Why it's open:** the implementation plan's Task 2.3 still describes
+  v3 setup (`tailwind.config.ts`, @nuxtjs/tailwindcss, `tailwind.config`
+  export, JS theme tokens). When we reach Task 2.3, we need to
+  reformulate the steps:
+  - Replace `tailwind.config.ts` creation with Tailwind v4 `@theme`
+    block inside `main.css` (CSS-first tokens).
+  - Use `@import "tailwindcss";` (already in the stub).
+  - Location CSS vars (`[data-location="..."]`) move under `@layer base`
+    in the same file.
+  - No separate Tailwind JS config unless we explicitly need a `@config
+    "./tailwind.config.js";` directive (not required for our tokens).
+- **Impact:** medium. The current `main.css` is a single-line stub. Task
+  2.3 must produce the full theme/tokens file. If we follow the plan
+  verbatim we'll re-introduce the v3 conflict.
+- **Resolution trigger:** Task 2.3 execution — update plan pre-flight,
+  then execute the v4-shaped version.
+- **Close when:** Task 2.3 lands with a `main.css` that includes all TDC
+  theme tokens + all 10 location CSS var blocks, dev server boots,
+  build succeeds, and no `tailwind.config.ts` exists at project root.
+
+---
+
 ### 🟢 TD-005 · Transitive deprecation warnings in npm
 
 - **Source:** Tasks 1.3 and 1.4
@@ -105,7 +139,7 @@ buffer for deferred work.
   setup). Add `npm install -D typescript@^6` at that step.
 - **Close when:** `typescript` appears as a direct `devDependency` in
   `frontend/package.json`.
-- **Closed:** 2026-04-23 · commit <this commit> (Task 2.1) — installed
+- **Closed:** 2026-04-23 · commit f585874 (Task 2.1) — installed
   `typescript@^6.0.3` as explicit `devDependency` in
   `frontend/package.json`.
 
@@ -123,7 +157,7 @@ buffer for deferred work.
   in the plan uses `'2026-04-01'`.
 - **Close when:** `grep compatibilityDate frontend/nuxt.config.ts`
   shows `'2026-04-01'` (or later).
-- **Closed:** 2026-04-23 · commit <this commit> (Task 2.1) — full
+- **Closed:** 2026-04-23 · commit f585874 (Task 2.1) — full
   `nuxt.config.ts` rewrite landed with `compatibilityDate: '2026-04-01'`.
 
 ---

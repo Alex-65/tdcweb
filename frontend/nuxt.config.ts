@@ -1,3 +1,5 @@
+import tailwindcss from '@tailwindcss/vite'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-04-01',
 
@@ -10,13 +12,19 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@vueuse/nuxt',
     '@nuxt/image',
-    '@nuxtjs/tailwindcss',
     '@nuxtjs/seo',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
   ],
 
   devtools: { enabled: true },
+
+  // Tailwind CSS v4 via the official Vite plugin (CSS-first config).
+  // The old `@nuxtjs/tailwindcss` module targets Tailwind v3 and conflicts
+  // with v4 hoisted by @nuxt/ui / nuxt-og-image. See TECH_DEBT TD-006.
+  vite: {
+    plugins: [tailwindcss()],
+  },
 
   css: ['~/assets/css/main.css'],
 
