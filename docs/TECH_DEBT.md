@@ -243,7 +243,7 @@ buffer for deferred work.
 - **Close when:** Task 2.3 lands with a `main.css` that includes all TDC
   theme tokens + all 10 location CSS var blocks, dev server boots,
   build succeeds, and no `tailwind.config.ts` exists at project root.
-- **Closed:** 2026-04-23 · commit <phase-2-commit> (Task 2.3) — main.css
+- **Closed:** 2026-04-23 · commit a9d20d2 (Task 2.3) — main.css
   rewritten with Tailwind v4 CSS-first config: @import "tailwindcss";
   + @theme block with color/font tokens indirected through CSS vars;
   + @layer base with :root defaults and 8 per-location blocks grouped by mood
@@ -269,7 +269,7 @@ buffer for deferred work.
 - **Resolution trigger:** Phase 2 end-of-phase audit forced the decision.
 - **Close when:** the 3 items are removed OR deliberately committed
   with a documented purpose.
-- **Closed:** 2026-04-24 · commit <phase-2-commit> (Phase 2 end-of-phase
+- **Closed:** 2026-04-24 · commit a9d20d2 (Phase 2 end-of-phase
   audit) — `package.json`, `package-lock.json`, and `node_modules/` at
   repo root were deleted. `frontend/` keeps its own lint setup;
   `backend/` will use Python linters (ruff/flake8). A future repo-wide
