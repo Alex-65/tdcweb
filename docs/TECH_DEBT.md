@@ -274,7 +274,7 @@ buffer for deferred work.
   **Task 3.0** (inserted before Task 3.1).
 - **Close when:** `flaskFetch` rewritten with stub-first + explicit
   fallback pattern matching `auth-forward.ts` and `cookies.ts`.
-- **Closed:** 2026-04-24 · Phase 3 atomic commit `<phase-3-commit>`
+- **Closed:** 2026-04-24 · Phase 3 atomic commit `554a4a4`
   (Task 3.0) — `frontend/server/utils/flask-client.ts` rewritten:
   `$fetch` resolved via `globalThis` stub first, falling back to the
   `ofetch` `$fetch` import at module-eval time; `useRuntimeConfig`
