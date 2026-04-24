@@ -81,7 +81,7 @@ tdcweb/
 │   ├── plans/                # pdp-v2.md (historical), pdp-v3.md (current)
 │   └── superpowers/          # Phase-specific specs and implementation plans
 │
-├── nginx/                    # Production nginx config
+├── apache/                   # Production Apache vhost config (Phase 6)
 ├── .claude/
 │   ├── agents/               # 27 domain agents (tdc-*)
 │   └── skills/               # CLI skills (tdc-docs, tdc-backend, etc.)
@@ -260,7 +260,7 @@ REDIS_URL=redis://localhost:6379/0
 ### Frontend `frontend/.env`
 
 ```env
-# Flask URL used by Nuxt SSR (server-to-server, bypasses nginx).
+# Flask URL used by Nuxt SSR (server-to-server, bypasses Apache).
 NUXT_FLASK_URL=http://localhost:9502
 
 # Cookie signing secret. Generate with: openssl rand -hex 64
@@ -269,7 +269,7 @@ NUXT_COOKIE_SECRET=change-me-in-production
 # Public site URL (canonical links, OpenGraph, sitemap).
 NUXT_PUBLIC_SITE_URL=http://localhost:9503
 
-# API base path as seen by the browser (nginx/proxy-resolved).
+# API base path as seen by the browser (Apache/proxy-resolved).
 NUXT_PUBLIC_API_BASE=/api
 ```
 

@@ -405,7 +405,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 | `/auth/login`, `/auth/register`, `/auth/callback/**` | **SSR** (no cache) | Dynamic per session |
 | `/dashboard/**`, `/admin/**` | **SPA** (`ssr: false`) | Auth-gated, no SEO value |
 | `/api/auth/**`, `/api/revalidate` | Nitro server routes (BFF) | Handled by Nuxt node |
-| `/api/**` (other) | Proxied to Flask | via nginx (prod) or Nitro devProxy (dev) |
+| `/api/**` (other) | Proxied to Flask | via Apache (prod, `mod_proxy_http`) or Nitro devProxy (dev) |
 
 **On-demand revalidation**: admin save → client POSTs `/api/revalidate { path }` → Nitro clears cache for that path → next visitor gets fresh content.
 
@@ -528,7 +528,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 │       ├── specs/               # Phase-specific architectural specs
 │       └── plans/               # Phase-specific task-level plans
 │
-├── nginx/                       # Production nginx config
+├── apache/                      # Production Apache vhost config (Phase 6)
 │
 ├── .claude/
 │   ├── agents/                  # 27 specialized agents (tdc-*)

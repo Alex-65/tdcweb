@@ -81,7 +81,7 @@ This PDP drives the public website that:
 | Component | Technology | Notes |
 |---|---|---|
 | Server | Ubuntu 22.04 | mioh1 @ Hetzner Frankfurt |
-| Web server | Nginx | Reverse proxy + static assets |
+| Web server | Apache (`mod_proxy_http`, `mod_rewrite`, `mod_headers`) | Reverse proxy + static assets |
 | SSL | Let's Encrypt (certbot) | Auto-renewal |
 | Backend runtime | Gunicorn + systemd (`tdcweb-backend.service`) | `:9500` prod |
 | Frontend runtime | Node + systemd (`tdcweb-frontend.service`) | `nuxt build` → `node .output/server/index.mjs`, `:9501` prod |
@@ -103,7 +103,7 @@ This PDP drives the public website that:
 | Nuxt | `:9503` (`nuxi dev`) | `:9501` (node, systemd) |
 | MySQL | `:3306` | `:3306` |
 
-Both backend and Nuxt bind to `127.0.0.1` in prod; only nginx reaches them.
+Both backend and Nuxt bind to `127.0.0.1` in prod; only Apache reaches them.
 
 ---
 
@@ -131,7 +131,7 @@ Per-route via `routeRules` in `frontend/nuxt.config.ts`:
 | `/auth/login`, `/auth/register`, `/auth/callback/**` | **SSR** (no cache) | Dynamic per session |
 | `/dashboard/**`, `/admin/**` | **SPA** (`ssr: false`) | Auth-gated, no SEO value |
 | `/api/auth/**`, `/api/revalidate` | Nitro server routes (BFF) | Handled by Nuxt node |
-| `/api/**` (other) | Proxied to Flask | nginx (prod), Nitro devProxy (dev) |
+| `/api/**` (other) | Proxied to Flask | Apache `mod_proxy_http` (prod), Nitro devProxy (dev) |
 
 **On-demand revalidation**: admin save → client POSTs `/api/revalidate { path }` → Nitro clears cache for the path → next visitor gets fresh content.
 
@@ -143,7 +143,7 @@ Per-route via `routeRules` in `frontend/nuxt.config.ts`:
 
 ```
                                  ┌────────────────────────────────┐
-  [Browser]  ──►  :443 nginx  ──►│ /_nuxt/, /assets → static disk │
+  [Browser]  ──►  :443 Apache ──►│ /_nuxt/, /assets → static disk │
                                  │ /api/auth/**    → :9501 Nuxt   │
                                  │ /api/revalidate → :9501 Nuxt   │
                                  │ /api/**         → :9500 Flask  │
@@ -151,7 +151,7 @@ Per-route via `routeRules` in `frontend/nuxt.config.ts`:
                                  └────────────────────────────────┘
                                            │
                         Nuxt SSR server-to-server → Flask :9500
-                        (bypasses nginx, loopback; carries Bearer
+                        (bypasses Apache, loopback; carries Bearer
                          from event.context.flaskHeaders)
 ```
 
@@ -189,7 +189,7 @@ The feature list is unchanged from v2 §11. The implementation phasing is re-cad
 | **3** | Port the public-facing Vue surface to Nuxt: app.vue + layout + error page + AppHeader + AppFooter + 3 public pages (home SSG, locations SSG, events ISR) + 4 composables (useApi, useScrollAnimation, useSmoothScroll, useLocationTheme) + 3 Pinia stores (auth/locale/ui) + 4 i18n locale JSON files (EN/IT/FR/ES) | ✅ Complete (this commit) |
 | **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | 📋 Next |
 | **5** | Docs + agent/skill updates for Nuxt 4 (some already done as prep work); finalize `pdp-v3.md` as source of truth | 🟡 In progress (this doc counts) |
-| **6** | Nginx + systemd production config + deploy workflow | 📋 Planned |
+| **6** | Apache vhost (`mod_proxy_http`) + systemd production config + deploy workflow | 📋 Planned |
 | **7** | Phase-end smoke / E2E / Core Web Vitals verification | 📋 Planned |
 
 ### Phase 3 highlights (2026-04-24)
@@ -263,7 +263,7 @@ Development cadence, per CLAUDE.md rule 16: **phase-end commit protocol** — wo
 
 ## 10. Observability & Operations
 
-- **Logs**: Flask via `logger.info(f"[module] ...")`, Nuxt Nitro via standard Node stdout, nginx access/error logs, MySQL slow-query log.
+- **Logs**: Flask via `logger.info(f"[module] ...")`, Nuxt Nitro via standard Node stdout, Apache access/error logs (`/var/log/apache2/`), MySQL slow-query log.
 - **Healthchecks**: `GET /api/health` on Flask, root `/` on Nuxt.
 - **Backups**: nightly MySQL dumps (retention per GDPR).
 - **Deploy**: `git push` to production branch → manual `npm run build` + `systemctl restart tdcweb-frontend tdcweb-backend` on mioh1.
