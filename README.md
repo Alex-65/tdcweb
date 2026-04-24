@@ -50,17 +50,20 @@ tdcweb/
 ├── frontend/                 # Nuxt 4 + Vue 3 + TypeScript (strict)
 │   ├── app/                  # Nuxt 4 `app/` layer
 │   │   ├── app.vue
-│   │   ├── assets/css/       # main.css (Tailwind v4 + location theming)
-│   │   ├── components/       # (created in later phases)
-│   │   ├── composables/      # (created in later phases)
-│   │   ├── plugins/          # gsap.client.ts, lenis.client.ts
-│   │   ├── stores/           # Pinia (created in later phases)
+│   │   ├── error.vue         # Global error page (a11y landmark + role=alert)
+│   │   ├── layouts/          # default.vue (AppHeader + slot + AppFooter)
+│   │   ├── pages/            # index.vue · locations/index.vue · events/index.vue
+│   │   ├── assets/css/       # main.css (Tailwind v4 @theme + location vars + --color-error)
+│   │   ├── components/       # common/AppHeader.vue · common/AppFooter.vue
+│   │   ├── composables/      # useApi · useScrollAnimation · useSmoothScroll · useLocationTheme
+│   │   ├── plugins/          # gsap.client.ts, lenis.client.ts (reduced-motion aware)
+│   │   ├── stores/           # auth.ts · locale.ts · ui.ts (Pinia setup syntax)
 │   │   └── types/            # Shared TS types (api, user, location, event)
 │   ├── server/               # Nitro server routes (hybrid BFF)
 │   │   ├── middleware/       # auth-forward.ts
-│   │   └── utils/            # cookies.ts, flask-client.ts
-│   ├── i18n/                 # @nuxtjs/i18n JSON locales (en/it/fr/es)
-│   ├── tests/                # vitest (unit), Playwright (E2E, added later)
+│   │   └── utils/            # cookies.ts · flask-client.ts (resilient pattern, TD-009 closed)
+│   ├── i18n/locales/         # en.json · it.json · fr.json · es.json (nav/home/locations/events/errors)
+│   ├── tests/                # vitest unit (21 specs) · Playwright E2E (11 at 1920x1080)
 │   ├── nuxt.config.ts
 │   ├── vitest.config.ts
 │   ├── .env.example
@@ -205,17 +208,24 @@ npm run test:watch              # vitest, watch mode
 
 ## Features (delivered + planned)
 
+- Public landing page with locale-aware SEO (delivered — Phase 3; `pages/index.vue`, SSG, hero scrim + i18n-bound meta)
+- Public locations list (delivered — Phase 3; `pages/locations/index.vue`, SSG, three-state template with localized empty + error)
+- Public events list (delivered — Phase 3; `pages/events/index.vue`, ISR `swr: 300`, preemptive-polish pattern from §23.1 of the playbook)
+- 10+ themed location palettes (in progress — 8/10 palettes live in `app/assets/css/main.css`; TD-008 tracks the remaining 2)
+- Semantic `--color-error` token + `text-error` utility (delivered — Phase 3 Task 3.6b)
+- `useApi()` composable with 401 auto-refresh + typed retry marker (delivered — Phase 3 Task 3.8, TDD-authored)
+- `useScrollAnimation` + `useSmoothScroll` + `useLocationTheme` composables (delivered — Phase 3 Tasks 3.10-3.11, reduced-motion aware)
+- Pinia stores: auth / locale / ui (delivered — Phase 3 Task 3.9; `ui.pushNotification` SSR-unsafe, playbook §10.6)
+- i18n content EN/IT/FR/ES — nav / home / home.seo / locations / events / errors namespaces (delivered — Phase 3 Task 3.4)
 - Immersive landing page with GSAP scroll animations (planned, Phase 5)
-- 10+ themed location pages with unique visual identities (in progress — 8 of 10 palettes live in `app/assets/css/main.css`)
 - Event calendar with Google Calendar sync (Phase 7)
 - Artist profiles and gallery (Phase 5)
 - Blog / News system with TipTap editor (Phase 5)
-- User registration with OAuth (Phase 4)
+- User registration with OAuth + login/logout/refresh/me BFF (Phase 4)
+- Auth-gated dashboard / admin SPA routes (Phases 4 and 6)
 - Patreon integration for exclusive content (Phase 7)
 - Facebook auto-posting for events (Phase 7)
 - Second Life in-world API (Phase 7)
-- Multilingual support (EN default, IT/FR/ES) — Nuxt i18n wired, content loading in Phase 3
-- Admin dashboard SPA (Phase 6)
 
 ## Documentation
 

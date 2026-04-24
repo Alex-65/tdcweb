@@ -34,9 +34,12 @@ a specific pattern.
 | 20 | Accessibility (WCAG 2.1 AA) | ~1655-1695 |
 | 21 | Performance (Core Web Vitals) | ~1700-1750 |
 | 22 | Common task recipes | ~1755-end |
+| 23 | Pattern library (Phase 3+) | end-of-file |
 
-Lines are approximate. Use `Read` with `offset`/`limit` if only part of a
-section is needed.
+Lines are approximate (they drift as sections are added or rewritten).
+Use `Read` with `offset`/`limit` and confirm against
+`grep -nE '^## [0-9]+' docs/frontend/nuxt-playbook.md` if you need to
+jump straight to a section.
 
 ---
 
@@ -433,14 +436,33 @@ const submit = async () => {
 
 ```typescript
 // app/composables/useApi.ts
-export const useApi = () => {
+/**
+ * Extension of Nuxt $fetch options carrying a `_retry` marker that
+ * `onResponseError` uses to guard against infinite 401 retry loops.
+ * Exported so tests can build typed mock contexts without `as any`.
+ *
+ * Derived from $fetch's own parameter type so it stays aligned with
+ * Nitro's NitroFetchOptions (which narrows `method` to a literal union,
+ * unlike ofetch's wider FetchOptions).
+ */
+export type RetryableFetchOptions = NonNullable<Parameters<typeof $fetch>[1]> & { _retry?: boolean }
+
+// Return type annotated explicitly: the `onResponseError` handler
+// recursively references `useApi()` in its retry path (spec §8.4 --
+// retry must re-enter the wrapper so `credentials: 'include'` and any
+// future interceptor logic are preserved). Without the annotation
+// TS7023 fires because the inferred type depends on itself.
+// `ReturnType<typeof $fetch.create>` names the Nitro wrapper type
+// without importing internal aliases.
+export const useApi = (): ReturnType<typeof $fetch.create> => {
   return $fetch.create({
     credentials: 'include',
     async onResponseError({ response, request, options }) {
-      if (response.status === 401 && !(options as any)._retry) {
+      const opts = options as RetryableFetchOptions
+      if (response.status === 401 && !opts._retry) {
         await $fetch('/api/auth/refresh', { method: 'POST' })
-        ;(options as any)._retry = true
-        return $fetch(request as string, options as any)
+        opts._retry = true
+        return useApi()(request as string, opts)
       }
     },
   })
@@ -450,6 +472,28 @@ export const useApi = () => {
 const api = useApi()
 const favorites = await api<Favorite[]>('/api/user/favorites')
 ```
+
+**Design notes (Phase 3).**
+
+1. **Typed retry marker, zero `as any`.** Earlier drafts spelled the flag
+   as `(options as any)._retry`. Reviewer-Phase-2 feedback required
+   eliminating the `any` cast. The export of `RetryableFetchOptions`
+   lets both the implementation and the test harness
+   (`tests/unit/useApi.test.ts`) build typed contexts.
+2. **Derive from `Parameters<typeof $fetch>[1]`, not ofetch's
+   `FetchOptions`.** Nitro narrows `method` to a literal union
+   (`'GET' | 'POST' | ...`) while ofetch's `FetchOptions` widens it to
+   `string`. Deriving from `$fetch`'s own parameter keeps strict mode
+   happy.
+3. **Recursive retry re-enters `useApi()`, not raw `$fetch`.** The
+   spec §8.4 contract requires `useApi()(request, opts)` so the
+   retry inherits the wrapper's `credentials: 'include'` and any
+   future interceptor logic. The `_retry` flag set to `true` before
+   the recursive call prevents infinite loops.
+4. **Explicit `ReturnType<typeof $fetch.create>` return type.** Without
+   it, TS7023 fires on the recursive reference. The explicit
+   annotation names the Nitro wrapper type without leaking internal
+   aliases.
 
 ### 5.8 SSR pass-through pattern
 
@@ -705,6 +749,11 @@ export function useScrollAnimation() {
 
   const animateReveal = (selector: string, options: Record<string, unknown> = {}) => {
     if (!import.meta.client) return
+    // Respect user accessibility preference: skip reveal entirely when
+    // the system signals reduced motion. Elements render at their
+    // natural CSS state (no translate, no fade-in). See the 3-layer
+    // reduced-motion discipline below §9 Lenis.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const { $gsap } = useNuxtApp() as unknown as { $gsap: typeof import('gsap').gsap }
     ctx.value = $gsap.context(() => {
       $gsap.from(selector, {
@@ -779,6 +828,16 @@ $gsap.to('.parallax-bg', {
 import Lenis from 'lenis'
 
 export default defineNuxtPlugin((nuxtApp) => {
+  // Accessibility: respect `prefers-reduced-motion`. When the user
+  // has asked the system to reduce animation, do NOT instantiate
+  // Lenis at all. Smooth-scroll on wheel/touch would still interpolate
+  // scroll position regardless of per-call guards in useSmoothScroll.
+  // Consumers rely on optional-chain `$lenis?.scrollTo(...)` to no-op
+  // when the provided value is null.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return { provide: { lenis: null as Lenis | null } }
+  }
+
   const lenis = new Lenis({ duration: 1.2, smoothWheel: true })
   const { $gsap } = nuxtApp as unknown as { $gsap: typeof import('gsap').gsap }
 
@@ -800,6 +859,25 @@ export default defineNuxtPlugin((nuxtApp) => {
 })
 ```
 
+**Three-layer reduced-motion discipline (Phase 3 pattern).**
+
+The `prefers-reduced-motion` media query is honoured at three layers so
+no single miss re-enables motion:
+
+1. **Lenis plugin** — when the query matches, the plugin never
+   constructs Lenis; `$lenis` is provided as `null`. Wheel / touch
+   smooth-scroll is therefore natively disabled.
+2. **`useScrollAnimation`** — `animateReveal()` checks the same query
+   and early-returns. Elements render at their natural CSS state.
+3. **`useSmoothScroll`** — `scrollTo()` checks the query and early-
+   returns. Programmatic scroll becomes a no-op; callers fall back
+   to whatever native behaviour they already had (`location.hash`,
+   `scrollIntoView`).
+
+Layer 1 is the guard; layers 2 and 3 are belt-and-braces. `$lenis` being
+`null` alone would already disable layer 3, but an explicit guard makes
+the intent visible at the consumer site.
+
 ### 9.2 Programmatic scrollTo
 
 ```typescript
@@ -807,7 +885,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 export function useSmoothScroll() {
   const scrollTo = (target: string | HTMLElement, options?: { offset?: number }) => {
     if (!import.meta.client) return
-    const { $lenis } = useNuxtApp() as unknown as { $lenis: import('lenis').default }
+    // Respect user accessibility preference: skip programmatic smooth
+    // scroll when reduced-motion is requested. Consumer fallback is
+    // browser-native scrollIntoView / location hash.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const { $lenis } = useNuxtApp() as unknown as { $lenis: import('lenis').default | null }
     $lenis?.scrollTo(target, options)
   }
   return { scrollTo }
@@ -880,6 +962,37 @@ Pinia is SSR-compatible out of the box with `@pinia/nuxt`. State set during SSR 
 - Feature stores (future): `events.ts`, `blog.ts`, etc.
 
 Keep each store focused. If a store exceeds ~300 lines, split by concern.
+
+### 10.6 SSR caveats
+
+Store **state** is SSR-safe. Store **actions** that call browser-only
+APIs are not. Concrete Phase 3 example:
+
+```typescript
+// app/stores/ui.ts
+export const useUiStore = defineStore('ui', () => {
+  const notifications = ref<Notification[]>([])
+
+  /**
+   * Push a notification onto the stack.
+   *
+   * @warning Do NOT call during SSR setup() or template interpolation.
+   * Uses `crypto.randomUUID()` which produces different IDs on server
+   * vs client, causing hydration mismatch. Safe for user-triggered
+   * actions (button clicks, API error handlers, form submissions
+   * post-mount).
+   */
+  const pushNotification = (n: Omit<Notification, 'id'>) => {
+    notifications.value.push({ ...n, id: crypto.randomUUID() })
+  }
+  // …
+})
+```
+
+Rule of thumb: any action that calls `crypto`, `Date.now()`,
+`Math.random()`, `window.*`, `localStorage`, `navigator.*`, or
+`IntersectionObserver` must be invoked from an event handler
+(`onMounted` or later), never from `setup()` top-level.
 
 ---
 
@@ -1312,6 +1425,11 @@ The single source of truth for TDC visual identity:
   --color-dark:      var(--tdc-color-dark);
   --color-surface:   var(--tdc-color-surface);
 
+  /* Semantic-state token consumed via `text-error`, `bg-error`,
+     `border-error` utilities. Not overridden per location (error has
+     universal meaning, palette-agnostic). Added Phase 3 Task 3.6b. */
+  --color-error:     var(--tdc-color-error);
+
   --font-display: "Inter", "system-ui", sans-serif;
   --font-body:    "Inter", "system-ui", sans-serif;
 
@@ -1325,6 +1443,7 @@ The single source of truth for TDC visual identity:
     --tdc-color-accent:    #22c55e;
     --tdc-color-dark:      #0c1222;
     --tdc-color-surface:   #141420;
+    --tdc-color-error:     #ef4444;
     --tdc-gradient-hero:   linear-gradient(135deg, #0891b2, #22c55e, #eab308);
   }
 
@@ -1405,6 +1524,20 @@ presented at the component layer and never appear as attribute values.
 slugs fall back to the `:root` Cosmic/Tech palette; no visual breakage,
 just no unique identity until palettes are added.
 
+**Known palette issues (Phase 3 close).**
+
+- **TD-011** — `jazzclub`'s `text-primary` (#92400e) on `bg-dark` fails
+  WCAG AA contrast (2.72:1). Exposed the moment a jazzclub-themed
+  page ships (none in Phase 3). Candidate fixes: lighten the primary,
+  introduce a separate `--tdc-color-chrome` token, or swap to the
+  accent colour. Locked until first jazzclub route.
+- **TD-013** — `livemagic`'s `--tdc-color-primary: #ef4444` is
+  identical to the global `--tdc-color-error: #ef4444`. On any
+  livemagic-themed page, error badges and primary CTAs lose semantic
+  distinction. Candidate fixes: darken `--tdc-color-error` globally,
+  give error states a container surface (`bg-error/10 border
+  border-error`), or shift the livemagic primary.
+
 ### 14.3 SSR-safe theme switch
 
 ```typescript
@@ -1435,6 +1568,36 @@ useLocationTheme(computed(() => location.value?.slug))
 | **Warm/Intimate** | Amber/red/teal, jazz/folk/acoustic | Arquipélago, Noah's Ark, Jazz Club |
 
 When adding a new location, place its CSS vars under the matching mood.
+
+### 14.5 Semantic-state tokens
+
+Aside from the per-location palette tokens, TDC maintains a small set
+of **palette-agnostic** semantic tokens. `--color-error` is the first
+one, landed in Task 3.6b when the locations list needed to render
+`text-error` on the failure branch.
+
+**Pattern:** when a new semantic meaning surfaces (e.g. success,
+warning, info, destructive action), add the token to `@theme` + the
+global default under `:root` **in the same task that needs it**, not
+in a future "tokens consolidation" pass. Consolidation into
+`docs/DESIGN.md` is TD-007 — but blocking progress on consolidation
+creates cascading delays. The phase-3 precedent is to add-then-reuse.
+
+**Active semantic tokens (as of Phase 3):**
+
+| Utility | CSS var | Default | Overridden per location? |
+|---|---|---|---|
+| `text-primary` / `bg-primary` | `--color-primary` → `--tdc-color-primary` | `#0891b2` | Yes |
+| `text-secondary` / `bg-secondary` | `--color-secondary` → `--tdc-color-secondary` | `#06b6d4` | Yes |
+| `text-accent` / `bg-accent` | `--color-accent` → `--tdc-color-accent` | `#22c55e` | Yes |
+| `text-dark` / `bg-dark` | `--color-dark` → `--tdc-color-dark` | `#0c1222` | No |
+| `bg-surface` | `--color-surface` → `--tdc-color-surface` | `#141420` | No |
+| `text-error` / `bg-error` / `border-error` | `--color-error` → `--tdc-color-error` | `#ef4444` | **No** (universal) |
+| `bg-hero-gradient` | `--background-image-hero-gradient` → `--tdc-gradient-hero` | cyan→green→yellow | Yes |
+
+`--tdc-color-error` is intentionally outside any `[data-location=...]`
+block because error semantics must not vary by location. See TD-013
+for the `livemagic` primary collision with the global error colour.
 
 ---
 
@@ -1642,7 +1805,7 @@ const onSubmit = handleSubmit(async (values) => {
         class="w-full px-4 py-3 bg-surface rounded-lg border border-white/10
                focus:border-primary focus:ring-2 focus:ring-primary/50"
       />
-      <p v-if="errors.email" id="email-error" class="text-red-400 text-sm mt-1">
+      <p v-if="errors.email" id="email-error" class="text-error text-sm mt-1">
         {{ errors.email }}
       </p>
     </div>
@@ -2005,6 +2168,166 @@ Testing: use `tdc-accessibility-tester` agent with Playwright for WCAG audits.
 2. Ensure admin save triggers `/api/revalidate` for the affected path
 3. Verify build generates the static pages (`npm run build` + inspect `.output/public`)
 4. Commit: `perf(frontend): prerender <route>`
+
+---
+
+## 23. Pattern library (Phase 3+)
+
+Phase 3 established a set of cross-page patterns that every new
+public-facing list/detail/error surface is expected to honour from
+the first commit (no "we'll polish later" iteration). Review the
+checklist before opening a PR that adds a page or component.
+
+### 23.1 Preemptive-polish 7-point checklist (list / detail pages)
+
+The pattern surfaced by tasks 3.6 → 3.6b → 3.7. After Task 3.6b the
+design-system reviewer flagged zero blocking findings on Task 3.7
+because the polish shape was applied up-front. Each point is easy to
+forget in isolation; together they are the difference between a
+reviewer-approved page and a design-system `b`-task rework.
+
+1. **i18n everywhere.** No English literal in template or in
+   `useSeoMeta(...)` (exception: brand-integrity strings like
+   `ogTitle: "The Dreamer's Cave"`). Every user-visible string
+   comes from `t('namespace.key')` or `$t('namespace.key')`.
+   Pair the page with a plan amendment that adds keys to all 4
+   locale JSONs in the same task.
+2. **Semantic error colour.** Error branches use `text-error`
+   (semantic state token, §14.5) — never `text-red-400` or any
+   raw hex / default Tailwind palette token.
+3. **Three-state template.** Always handle `error`, populated, and
+   empty separately:
+   ```vue
+   <div v-if="error" role="alert" class="text-error">
+     {{ t('x.error.load_failed') }}: {{ error.statusMessage }}
+   </div>
+   <div v-else-if="items && items.length" class="grid …">…</div>
+   <div v-else class="text-white/70">{{ t('x.empty') }}</div>
+   ```
+   Skipping the empty state leaves a blank page on a legitimate
+   zero-item response — indistinguishable from a silent failure.
+4. **Null-guard optional fields.** When rendering DB-sourced text
+   that may be `null`, gate the element with `v-if`:
+   ```vue
+   <p v-if="location.description">{{ location.description }}</p>
+   ```
+   Skipping the guard renders an empty `<p>` and shifts following
+   content when data is missing.
+5. **Locale-aware internal links.** Every `<NuxtLink :to="...">`
+   pointing at an internal path goes through `useLocalePath()`:
+   ```vue
+   <script setup>
+   const localePath = useLocalePath()
+   </script>
+   <NuxtLink :to="localePath(`/locations/${slug}`)">…</NuxtLink>
+   ```
+   Forgetting this on IT/FR/ES routes strips the locale prefix and
+   sends users to the English page.
+6. **Focus-visible ring on every interactive surface.** Buttons,
+   links, and `NuxtLink` wrappers all carry the 5-class chain:
+   ```
+   focus-visible:outline-none focus-visible:ring-2
+   focus-visible:ring-primary focus-visible:ring-offset-2
+   focus-visible:ring-offset-dark
+   ```
+   Promotion to an `@layer components` alias is scheduled for
+   whenever 5+ distinct consumers exist (TD-007 consolidation
+   will formalize this — for now, copy the chain).
+7. **Pure `@theme` tokens.** No raw hex in templates. No default
+   Tailwind palette utilities (`text-red-400`, `bg-gray-700`,
+   `text-blue-500`) — every colour is a TDC `@theme` token. If
+   the token you need doesn't exist yet, add it in the same task
+   (§14.5 semantic-token pattern).
+
+Reference implementations:
+
+- `frontend/app/pages/locations/index.vue` (Task 3.6b, list with
+  grid card layout)
+- `frontend/app/pages/events/index.vue` (Task 3.7, list with
+  stacked `<ul>`)
+- `frontend/app/pages/index.vue` (Task 3.5b, single-section home
+  with SEO meta bound to i18n)
+- `frontend/app/error.vue` (Task 3.2b, global error page with
+  `role="alert"` and `<main>` landmark)
+
+### 23.2 `role="alert"` standardization
+
+Every error surface in TDC uses `role="alert"` on the container div
+so screen readers announce it as a live region. This includes:
+
+- `frontend/app/error.vue` (root error page)
+- `frontend/app/pages/locations/index.vue` (list error branch)
+- `frontend/app/pages/events/index.vue` (list error branch)
+
+Add `role="alert"` to the container `<div>` that wraps the error
+message, not to the text element inside. When adding a new page with
+an error branch, include `role="alert"` from the first commit.
+
+### 23.3 Controller micro-edit threshold
+
+Scan row 31 codified a threshold for when the controller may edit a
+file directly rather than dispatching a new implementer subagent.
+Document it here so subagents know when their dispatch was
+appropriate vs when a micro-edit would have sufficed.
+
+**A change is eligible for controller micro-edit when ALL hold:**
+
+- Change touches ≤3 lines.
+- Change adds zero new behaviour (wraps existing behaviour, adds a
+  guard, narrows a class list, swaps a string for an i18n key).
+- Change does not introduce a new surface, new composable, new
+  type, or new dependency.
+- Change is verifiable by typecheck + existing tests (no new test
+  needed).
+
+**Phase 3 micro-edit precedents (all approved by user in situ):**
+
+- `pages/index.vue` subtitle `text-xl md:text-2xl` → `text-2xl`
+  (1-word removal for AA-large contrast).
+- `pages/locations/index.vue` `NuxtLink :to="/locations/${slug}"` →
+  `:to="localePath(\`/locations/${slug}\`)"` + `const localePath =
+  useLocalePath()` in setup (2 lines).
+- `useScrollAnimation.ts` reduced-motion guard (3-line early-return).
+
+Anything more complex goes back through a subagent dispatch.
+
+### 23.4 Plan authoring: check cross-task consistency up front
+
+Phase 3 surfaced two plan-internal contradictions (scan §C.3):
+
+- Task 3.2 layout referenced `<AppHeader />` (unprefixed) but Task 3.3
+  placed the file at `app/components/common/AppHeader.vue`, which
+  Nuxt 4 default naming registers as `<CommonAppHeader />`.
+- Task 3.3 AppFooter template had `{{ new Date().getFullYear() }}`
+  with a "stable across SSR and hydration" note — conflicting with
+  CLAUDE.md SSR Rule #4 (non-negotiable forbiddance of `new Date()`
+  in templates).
+
+When authoring a plan, pre-check: (a) every component reference's
+auto-import name matches its filesystem path under the configured
+`components` rules, (b) every template fragment honours CLAUDE.md SSR
+rules. Both contradictions cost implementation time that could have
+been saved by a 10-minute consistency pass during plan authoring.
+
+### 23.5 Date rendering — deferred to `useFormattedDate`
+
+Raw ISO 8601 (`{{ event.starts_at }}`) is SSR-safe but developer-
+shaped, not user-friendly. The safe locale-aware pattern is a
+composable:
+
+```typescript
+// future: app/composables/useFormattedDate.ts  (TD-012)
+export function useFormattedDate(iso: MaybeRef<string>, locale?: MaybeRef<string>) {
+  // Run formatting inside computed() with a fixed timeZone (or an
+  // explicit ref+onMounted pattern) so SSR and client produce
+  // identical output. Unit-test the SSR/client parity.
+}
+```
+
+Until TD-012 closes, pages render `<time :datetime="iso">{{ iso }}</time>`
+— datetime attribute is machine-readable, the visible text is the raw
+ISO. Acceptable for developer-shaped surfaces (events list) but blocks
+on event detail + calendar pages.
 
 ---
 

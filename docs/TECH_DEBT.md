@@ -67,39 +67,6 @@ buffer for deferred work.
 - **Close when:** `grep -rn '@studio-freight/lenis'
   .claude/skills/` returns nothing.
 
-### 🟡 TD-009 · `flask-client.ts` uses globalThis-only pattern — prod Nitro safety unverified
-
-- **Source:** Task 2.7 review (2026-04-24) surfaced the risk.
-- **Issue:** `frontend/server/utils/flask-client.ts` (Task 2.6) reads
-  `$fetch` and `useRuntimeConfig` exclusively from `globalThis` via
-  `getFetch()` / `getRuntimeConfig()` helpers. Task 2.7 proved that
-  Nitro's prod bundle does NOT universally expose h3 auto-imports on
-  `globalThis` — `getCookie` lives as a regular module binding in
-  `.nuxt/dev/index.mjs:5736`. By analogy, `$fetch` and `useRuntimeConfig`
-  may also be module bindings in the prod bundle and therefore absent
-  from `globalThis` when `flaskFetch` is called from a server route.
-  If so, the first SSR request that calls `flaskFetch` would throw
-  `TypeError: $fetch is not a function`.
-- **Why it's open:** unit tests pass because they install globalThis
-  stubs, so the flaw cannot be caught at unit-test layer. Verifying
-  prod-safety requires either an integration smoke test (Phase 4 when
-  login BFF is wired) or a direct grep of `.output/server/index.mjs`
-  after a production build.
-- **Impact:** potentially high IF the risk materializes — every
-  server route that calls `flaskFetch` would 500. Unknown IF it's
-  theoretical (Nuxt/Nitro may still keep `$fetch` on globalThis even
-  though `getCookie` isn't).
-- **Resolution trigger:** either (A) Phase 4 real E2E hits a route
-  that proxies to Flask via `flaskFetch` and we observe the behavior,
-  or (B) we preemptively apply the Task 2.7 resilient pattern (stub
-  → explicit fallback to `ofetch` / `nitropack`).
-- **Close when:** `flaskFetch` has been invoked from a real server
-  route in prod build mode without error, OR it has been rewritten
-  to use the resilient pattern matching `auth-forward.ts` (stub
-  first, explicit fallback import).
-
----
-
 ### 🟢 TD-008 · 2 location palettes missing from `main.css`
 
 - **Source:** Task 2.3 (uncommitted in working tree, 2026-04-23)
@@ -125,7 +92,119 @@ buffer for deferred work.
 
 ---
 
-### 🟡 TD-007 · Consolidated `docs/DESIGN.md` missing
+### 🟡 TD-011 · Jazzclub palette fails chrome contrast after outline-login refactor
+
+- **Source:** Task 3.3b (working tree, 2026-04-24). User-approved option (b) accept + log.
+- **Current state (Phase 3 close, 2026-04-24):** still open. No Phase 3 page
+  sets `body[data-location="jazzclub"]`, so user-visible impact is zero for
+  this commit. Resolution remains deferred per user decision.
+- **Issue:** The outline-style login button introduced by Task 3.3b (DS-3 fix) uses
+  `text-primary` against `bg-dark` (#0c1222) in the resting state. The jazzclub
+  palette defines `--tdc-color-primary: #92400e` (amber-800). Contrast ratio
+  against bg-dark is 2.72:1, below WCAG 1.4.3 AA normal text (4.5:1) AND below
+  1.4.11 non-text (3:1). This is a regression specific to jazzclub: the previous
+  filled style (text-white on bg-primary) passed at 6.86:1 for this palette.
+  The same regression affects the nav links' hover and active states (also
+  text-primary on bg-dark) for jazzclub.
+  7/8 palettes are NET-IMPROVED by the outline refactor; jazzclub is the only
+  regression.
+- **Why it's open:** The outline refactor was a strict win on 7 palettes
+  (including all the worst filled-style offenders) and only regressed the one
+  palette that was best under filled. The jazzclub location route
+  (`/locations/jazzclub`) does not exist yet — it lands in Phase 4+ territory
+  — so real user-visible impact is bounded to the period between now and when
+  the page goes live. User chose to accept the regression now and revisit when
+  jazzclub routes land.
+- **Impact:** medium. Login CTA and nav chrome become unreadable for keyboard/
+  screen-reader users on any page rendered under `body[data-location="jazzclub"]`.
+  No such page exists yet; impact materializes at first jazzclub route.
+- **Resolution trigger:** first Phase 4+ page that sets
+  `body[data-location="jazzclub"]`. At that point the contrast must be fixed,
+  not deferred further.
+- **Close when:** text-primary against bg-dark for jazzclub meets at least
+  WCAG 1.4.11 non-text (3:1) AND preferably 1.4.3 AA normal (4.5:1). Candidate
+  approaches documented during Phase 3 Task 3.3b review:
+  - (a) Lighten jazzclub primary (e.g. `#b45309` amber-700 → ~3.7:1, `#ea580c`
+    orange-600 → ~5.0:1, `#f59e0b` amber-500 → ~10:1). Requires product
+    sign-off on shifted warm-tone identity.
+  - (c) Introduce a separate `--tdc-color-chrome` token per palette so hero /
+    accent colors stay brand-faithful while chrome CTAs get a guaranteed-AA
+    sibling.
+  - (d) Swap jazzclub's chrome to `--tdc-color-accent` (#14b8a6 teal, ~7:1) —
+    but teal is off-mood for a jazz venue. Sub-optimal.
+
+---
+
+### 🟢 TD-012 · `useFormattedDate` SSR-safe composable missing
+
+- **Source:** Phase 3 closing scan row 38 (2026-04-24). Surfaced by Task 3.7
+  (events list) rendering raw ISO 8601 in `<time>{{ event.starts_at }}</time>`.
+- **Issue:** TDC has no helper for rendering DB-provided ISO 8601 timestamps
+  (e.g. `"2026-05-15T20:00:00Z"`) in a locale-aware, user-friendly form
+  (e.g. `"15 May 2026, 20:00"` for EN, `"15 maggio 2026, 20:00"` for IT).
+  The naïve approach — `{{ new Date(iso).toLocaleString(locale) }}` inside a
+  template — violates CLAUDE.md § SSR Client-Only Rules #4 (both `new Date()`
+  from an ISO without explicit TZ and `.toLocaleString()` with the host's
+  Intl data diverge between server and client and cause hydration mismatch).
+  The safe shape is a composable: `useFormattedDate(iso, locale)` that either
+  (a) runs at SSR time with a fixed `timeZone: 'UTC'` + the Nuxt `locale`,
+  producing the same string server- and client-side, OR (b) uses a ref+onMounted
+  pattern with a stable SSR fallback.
+- **Why it's open:** Phase 3 pages only render raw ISO (events list is the
+  single consumer). Developer-readable, not ideal for end users, but not a
+  regression: no prior human-formatted rendering existed. Phase 4+ event
+  detail and calendar pages drive the concrete need.
+- **Impact:** low for now (one page, developer-shaped text). Escalates to
+  medium once event detail + calendar pages ship and locale-aware
+  formatting becomes a UX expectation.
+- **Resolution trigger:** first Phase 4+ page that needs user-friendly date
+  rendering (event detail page is the most likely driver). At that point,
+  implement `frontend/app/composables/useFormattedDate.ts` + unit tests for
+  SSR/client parity across EN/IT/FR/ES.
+- **Close when:** `useFormattedDate(iso, locale)` exists under
+  `frontend/app/composables/`, has vitest coverage proving identical output
+  server-side and client-side for a fixed locale, and is adopted on every
+  date-rendering surface (grep `toLocaleString` and raw-ISO `<time>` should
+  return only test fixtures).
+
+---
+
+### 🟡 TD-013 · `livemagic` primary collides with `--color-error` semantic token
+
+- **Source:** Phase 3 closing scan row 26, Task 3.6b design-system review.
+- **Issue:** The new semantic-state token `--tdc-color-error: #ef4444` (added
+  in Task 3.6b to make `text-error` / `bg-error` utilities available) collides
+  with `[data-location="livemagic"] { --tdc-color-primary: #ef4444 }`. On any
+  livemagic-themed page (Phase 4+), error messages rendered with `text-error`
+  and primary CTAs rendered with `text-primary` produce identical RGB output.
+  Users lose the semantic distinction between "this is the brand action" and
+  "this is an error". Phase 3 impact: zero (no Phase 3 page sets
+  `body[data-location="livemagic"]`; `:root` palette uses the same red for
+  both tokens but there is no livemagic page yet to expose the collision
+  visually).
+- **Why it's open:** no Phase 3 page surfaces the collision. Fixing requires
+  a product-informed choice between candidate resolutions, each with
+  tradeoffs; forcing the decision mid-phase would be premature.
+- **Impact:** medium. On a livemagic-themed page, a red error badge next to
+  a red primary CTA is visually ambiguous. WCAG doesn't fail per se
+  (both meet contrast) but the UX regression is real.
+- **Resolution trigger:** first Phase 4+ page that sets
+  `body[data-location="livemagic"]` AND surfaces both a primary CTA and an
+  error state on the same viewport (e.g. auth pages under a livemagic theme,
+  or any livemagic-themed form).
+- **Close when:** primary CTA and error state are visually distinguishable on
+  livemagic-themed pages. Candidate resolutions documented during review:
+  - (a) Darken `--tdc-color-error` to `#dc2626` (red-600) globally. Still red,
+    still conventional, unambiguous next to livemagic's `#ef4444` primary.
+  - (b) Give error states a container surface instead of relying on text color
+    alone (`bg-error/10 border border-error text-error`) so differentiation
+    comes from shape+ground, not color alone. Scales to all palettes.
+  - (c) Shift livemagic primary away from `#ef4444` (e.g. deeper orange
+    `#ea580c`). Requires brand sign-off.
+
+---
+
+### 🟢 TD-007 · `docs/DESIGN.md` consolidated visual identity missing
 
 - **Source:** tdc-design-system-enforcer agent creation (2026-04-23).
 - **Issue:** TDC does not have a single authoritative visual-identity
@@ -175,6 +254,36 @@ buffer for deferred work.
 ---
 
 ## Closed items
+
+### 🟡 TD-009 · `flask-client.ts` uses globalThis-only pattern — prod Nitro safety unverified
+
+- **Source:** Task 2.7 review (2026-04-24) surfaced the risk.
+- **Issue:** `frontend/server/utils/flask-client.ts` (Task 2.6) read
+  `$fetch` and `useRuntimeConfig` exclusively from `globalThis` via
+  helper functions. Task 2.7 proved that Nitro's prod bundle does NOT
+  universally expose h3 auto-imports on `globalThis` — `getCookie` lives
+  as a regular module binding in `.nuxt/dev/index.mjs:5736`. By analogy,
+  `$fetch` and `useRuntimeConfig` could be module bindings in the prod
+  bundle too, so the first SSR request that called `flaskFetch` would
+  have risked `TypeError: $fetch is not a function`.
+- **Why it was open:** unit tests passed because they installed
+  globalThis stubs, hiding the flaw. Prod-safety verification required
+  a real SSR hit or a preemptive rewrite.
+- **Resolution trigger fired:** user approved option (A) — preemptive
+  resilient-pattern rewrite — on 2026-04-24. Executed as Phase 3
+  **Task 3.0** (inserted before Task 3.1).
+- **Close when:** `flaskFetch` rewritten with stub-first + explicit
+  fallback pattern matching `auth-forward.ts` and `cookies.ts`.
+- **Closed:** 2026-04-24 · Phase 3 atomic commit `<phase-3-commit>`
+  (Task 3.0) — `frontend/server/utils/flask-client.ts` rewritten:
+  `$fetch` resolved via `globalThis` stub first, falling back to the
+  `ofetch` `$fetch` import at module-eval time; `useRuntimeConfig`
+  resolved via `globalThis` with an explicit `throw new Error(...)`
+  when absent (no clean module fallback exists). Test coverage
+  extended from 3 to 8 assertions: the original 3 happy-path tests
+  plus a fallback-path test (globalThis $fetch deleted → ofetch mock
+  invoked) plus a missing-runtimeConfig error test. Typecheck 0
+  errors, test suite 8/8 on flask-client, 21/21 overall for the phase.
 
 ### 🟡 TD-001 · TypeScript not explicit in devDependencies
 

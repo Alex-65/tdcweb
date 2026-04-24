@@ -5,6 +5,252 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2026-04-24] — Phase 3 (Nuxt 4 frontend port — pages, components, composables, stores, i18n)
+
+Phase 3 ports the surviving frontend surface from the Vue 3 + Vite backup
+(`frontend.vue-backup/`) onto the Nuxt 4 runtime laid down in Phase 2.
+End state: a public site that dev-boots, prod-builds, SSR-renders three
+public pages (home SSG, locations SSG, events ISR) across EN/IT/FR/ES,
+uses typed composables for data + animation + theming, and passes all
+21 unit tests plus 11/11 Playwright E2E at 1920x1080.
+
+Phase 3 landed 12 main tasks (3.0 through 3.11) plus 4 scope-expanded
+polish sub-tasks (3.2b, 3.3b, 3.5b, 3.6b) plus 5 controller-level
+phase-end micro-edits (favicon, Lenis reduced-motion guard, nav active
+differentiation, error `role="alert"` standardization, AppFooter motto
+via i18n). All governed via the per-task no-commit loop (CLAUDE.md
+rule 15) with phase-end triple review + real tests + docs sync
+(rule 16) in one atomic commit.
+
+### Added
+
+#### Pages (public)
+
+- `frontend/app/pages/index.vue` — home page (SSG). `useSeoMeta` bound
+  to `home.hero_title` / `home.seo.description` / `home.seo.og_description`;
+  hero gradient layered under a `bg-dark/40` scrim (Task 3.5b) for
+  cross-palette WCAG AA contrast; subtitle promoted to `text-2xl` for
+  AA-large on yellow-biased palettes. Brand-integrity `ogTitle` stays
+  English literal.
+- `frontend/app/pages/locations/index.vue` — locations list (SSG).
+  `useFetch<Location[]>('/api/locations')` with `key: 'locations-list'`.
+  Three-state template: error branch (`role="alert" text-error` +
+  `t('locations.error.load_failed')`), populated grid, empty-state
+  (`t('locations.empty')`). Null-guarded description. Card
+  `NuxtLink` wrapped with `useLocalePath()` so IT/FR/ES deep-links
+  preserve their locale prefix (fix applied as Task 3.6b controller
+  micro-edit). Focus-visible ring on every card.
+- `frontend/app/pages/events/index.vue` — events list (ISR, `swr: 300`
+  via `nuxt.config.ts routeRules`). `useFetch<Event[]>('/api/events')`
+  with `query: { upcoming: 'true' }`. Preemptive-polish delivery from
+  Task 3.7 (the first task to ship the full polish pattern without a
+  `b`-task iteration): i18n via `t('events.*')`, `text-error` + `role="alert"`
+  on error, `v-else-if="events && events.length"` populated branch,
+  `v-else` empty state with `t('events.empty')`. Raw-ISO `<time datetime="...">`
+  retained as SSR-safe developer view until `useFormattedDate` composable
+  lands (TD-012).
+
+#### Components
+
+- `frontend/app/layouts/default.vue` — site layout scaffold. Wraps
+  `<NuxtPage />` between `<AppHeader />` and `<AppFooter />` with a
+  `flex flex-col min-h-screen` frame.
+- `frontend/app/error.vue` — global error page. `role="alert"` live
+  region, status code + status message with `t('errors.message_fallback')`
+  fallback, "Back to home" button bound to `clearError({ redirect: '/' })`
+  with `t('errors.back_to_home')`. Focus-visible ring on the CTA. Root
+  element switched to `<main>` for accessibility landmark (Task 3.2b).
+- `frontend/app/components/common/AppHeader.vue` — sticky header.
+  Four nav links (locations / events / artists / blog) with
+  `useLocalePath()` wrap, `hover:text-primary transition-colors`, and
+  `active-class="text-primary font-bold"` (bold-weight differentiator
+  resolves nav hover/active ambiguity from scan row 36). Locale
+  switcher `<select>`. Outline-style login button (`border-primary
+  text-primary hover:bg-primary hover:text-white`) replaces the
+  Phase 3 plan's filled primary — wins AA contrast on 7/8 palettes
+  (jazzclub regresses, see TD-011). Focus-visible ring on login CTA.
+- `frontend/app/components/common/AppFooter.vue` — site footer.
+  Copyright year hoisted to `<script setup>` (`const year = new
+  Date().getFullYear()`) per CLAUDE.md SSR Rule #4 (templates must not
+  call `new Date()` — the plan's original template inline got overridden
+  with a script-setup hoist and rationale comment). Motto pulled from
+  `$t('home.hero_title')` — pragmatic DRY on an identical English /
+  translated string rather than duplicating a `common.motto` namespace.
+
+#### Composables
+
+- `frontend/app/composables/useApi.ts` — `$fetch.create({ credentials:
+  'include' })` wrapper with 401 auto-refresh. Exports
+  `RetryableFetchOptions = NonNullable<Parameters<typeof $fetch>[1]>
+  & { _retry?: boolean }` — derived from Nitro's `$fetch` parameter
+  type rather than ofetch's `FetchOptions`, so the `method` literal
+  union narrows correctly under strict mode. Retry path recursively
+  calls `useApi()(request, opts)` per spec §8.4 (re-enters the wrapper
+  so credentials + future interceptor logic are preserved; `_retry`
+  flag guards against infinite loops). Explicit
+  `: ReturnType<typeof $fetch.create>` return type annotation prevents
+  TS7023 on the recursive reference.
+- `frontend/app/composables/useScrollAnimation.ts` — `gsap.context()`-
+  scoped scroll-triggered reveal animation with `onBeforeUnmount` →
+  `ctx.revert()` cleanup + `$ScrollTrigger?.refresh()` to prevent
+  instance leaks across navigations (CLAUDE.md SSR Rule #1). Guards
+  with `import.meta.client` and `window.matchMedia('(prefers-reduced-motion:
+  reduce)').matches` — opt-in reduced-motion users get no reveal
+  animation, just the natural CSS state.
+- `frontend/app/composables/useSmoothScroll.ts` — Lenis programmatic
+  `scrollTo(target, options)` wrapper. `import.meta.client` + reduced-
+  motion guards. Uses optional-chain `$lenis?.scrollTo(...)` so it
+  no-ops when Lenis wasn't instantiated (reduced-motion users).
+- `frontend/app/composables/useLocationTheme.ts` — accepts `Ref<string
+  | null | undefined>` or plain string. Sets `body[data-location="<slug>"]`
+  via `useHead({ bodyAttrs })` — SSR-safe, zero-JS at paint, consumes
+  the `:root` fallback palette for unknown slugs.
+
+#### Pinia stores
+
+- `frontend/app/stores/auth.ts` — setup-syntax store. `user`, derived
+  `isAuthenticated` / `isAdmin` / `isStaff`, `setUser(u)` / `clear()`
+  actions.
+- `frontend/app/stores/locale.ts` — setup-syntax store. `current`
+  locale code + `setLocale(code)`.
+- `frontend/app/stores/ui.ts` — setup-syntax store. `isMobileMenuOpen`,
+  `notifications[]` with JSDoc `@warning` that `pushNotification()`
+  uses `crypto.randomUUID()` and must NOT be called during SSR setup
+  or template interpolation (scan row 32 SSR constraint). Safe for
+  user-triggered post-mount actions.
+
+#### i18n content
+
+- `frontend/i18n/locales/en.json` + `it.json` + `fr.json` + `es.json`
+  — 9 new namespaces × 4 locales = 36 translations. Keys: `nav.{locations,
+  events,artists,blog,login}`, `home.{hero_title,hero_subtitle}`,
+  `home.seo.{description,og_description}`, `locations.{title,empty}`,
+  `locations.seo.description`, `locations.error.load_failed`,
+  `events.{title,empty}`, `events.seo.description`,
+  `events.error.load_failed`, `errors.{message_fallback,back_to_home}`.
+
+#### Tests
+
+- `frontend/tests/unit/useApi.test.ts` (4 tests, TDD-authored) — covers
+  the `$fetch.create({ credentials: 'include' })` contract, the
+  `onResponseError` registration, the 401 refresh+retry happy path, and
+  the single-retry guard (no infinite loop when `_retry` is already true).
+- `frontend/tests/unit/flask-client.test.ts` — extended from 3 to 8
+  assertions (5 new): fallback-path verification (ofetch mock invoked
+  when `globalThis.$fetch` absent — TD-009 resolution proof), plus
+  missing-runtimeConfig error path test.
+
+### Changed
+
+- `frontend/app/assets/css/main.css` — added semantic-state token
+  `--tdc-color-error: #ef4444` in `:root` and mapped `--color-error:
+  var(--tdc-color-error)` in `@theme`. Pattern: when a semantic token
+  is missing at first consumer-need, add it alongside the consumer
+  rather than waiting for DESIGN.md (TD-007) consolidation. Not
+  overridden per location (error has universal meaning).
+- `frontend/app/app.vue` — favicon reference switched from
+  non-existent `/favicon.svg` to existing `/favicon.ico`. SVG
+  reintroduction deferred to a future brand-assets task.
+- `frontend/app/plugins/lenis.client.ts` — `prefers-reduced-motion` guard
+  at plugin init. When the media query matches, the plugin returns
+  `{ provide: { lenis: null as Lenis | null } }` — Lenis is not
+  instantiated at all, so wheel/touch interpolation never kicks in.
+  Consumers already use the optional-chain `$lenis?.scrollTo(...)`
+  pattern and no-op cleanly.
+- `frontend/nuxt.config.ts` — added `components: [{ path: '~/components',
+  pathPrefix: false }]` so `common/AppHeader.vue` registers as
+  `<AppHeader />` (flat naming). Removed `lazy: true` from the i18n
+  block (`@nuxtjs/i18n` v9+ auto-lazies when `langDir` + per-locale
+  `file` are set; the flag emits a deprecation warning).
+- `docs/TECH_DEBT.md` — TD-009 closed against this phase's commit.
+  TD-011 annotated with Phase 3 close state (still open, no jazzclub
+  page in this phase). TD-012 (`useFormattedDate`) and TD-013
+  (`livemagic` vs `--color-error` collision) opened. TD-007 header
+  restored (was missing).
+
+### Fixed
+
+- Flat component naming under subdirectory: Phase 3 Task 3.3
+  discovered the plan's internal contradiction between `<AppHeader />`
+  (used in layout) and `app/components/common/AppHeader.vue` (path),
+  since Nuxt 4 default auto-naming would produce `<CommonAppHeader />`.
+  Resolved via `components.pathPrefix: false` rather than moving the
+  file or switching the usage. Plan amended in docs-sync.
+- AppFooter copyright year SSR safety: plan had
+  `{{ new Date().getFullYear() }}` inline in template with a "stable
+  across SSR and hydration" note; CLAUDE.md SSR Rule #4 is
+  NON-NEGOTIABLE. Hoisted to `<script setup>` with explicit rationale
+  comment covering the NYE edge case. SSR HTML byte-identical to the
+  plan's intent.
+- Nav hover / active-route visual collision: `hover:text-primary` and
+  `active-class="text-primary"` produced ambiguous state when a user
+  on `/events` hovered `/locations` (both primary red). Active class
+  upgraded to `text-primary font-bold` — differentiation now comes
+  from weight, not color.
+- Error surface standardization: all 3 error branches in Phase 3
+  (error.vue, locations list, events list) carry `role="alert"` for
+  screen-reader live-region announcement. Prior state: only error.vue
+  had it (Task 3.2b carryover).
+
+### Security
+
+- Auth-cookie contract unchanged from Phase 2 (`tdc_access`
+  HttpOnly/Lax/Path=/ · `tdc_refresh` HttpOnly/Strict/Path=/api/auth).
+  Phase 3 adds no new auth surface; the BFF routes land in Phase 4.
+- `useApi` retry loop provably bounded: `_retry` flag set to `true`
+  before recursive `useApi()(request, opts)` call. Second 401 response
+  does not trigger a second refresh (unit-tested).
+
+### Infrastructure
+
+- Prod build verified: `nuxt build` + SSR bundle audit
+  (`grep -r "gsap\|lenis" frontend/.output/server/` returns zero
+  runtime imports — `import type` in composables keeps client-only
+  libraries out of the SSR bundle). Closes closing-scan row 39.
+- Full test suite: 21/21 unit tests green (`flask-client` ×8,
+  `auth-forward` ×3, `cookies` ×9, `useApi` ×4, `useApi.test-utils`
+  ×1) — +6 over Phase 2's baseline (`useApi` ×4 new; `flask-client`
+  +5, -3 renamed paths).
+- Playwright E2E at 1920x1080: 11/11 PASS across EN/IT/FR/ES route
+  matrix (home, locations, events x 4 locales, plus error page).
+
+### Verification
+
+- `nuxi typecheck`: 0 errors.
+- `npm test`: 21 tests, all green.
+- `npm run build` + `node .output/server/index.mjs`: prod boot clean,
+  HTTP 200 on `/`, `/it/`, `/fr/`, `/es/`, `/locations`, `/events`,
+  `/it/locations`, `/it/events`, (etc.).
+- Playwright E2E: 11/11 PASS at 1920x1080 on the public route set.
+- SSR bundle audit: GSAP + Lenis absent from
+  `frontend/.output/server/**`.
+
+### Deferred / Open
+
+- **TD-011** (jazzclub chrome contrast) — still open, no Phase 3 page
+  exposes it. Resolution trigger: first Phase 4+ `body[data-location=
+  "jazzclub"]` render.
+- **TD-012** (`useFormattedDate` composable) — new, opened this phase.
+  Resolution trigger: Phase 4+ event detail or calendar page needing
+  user-friendly locale-aware date rendering.
+- **TD-013** (livemagic primary vs `--color-error` collision) — new,
+  opened this phase. Resolution trigger: first Phase 4+ livemagic-
+  themed page that surfaces a primary CTA and an error state together.
+- Phase-3-adjacent items tracked in the closing user-intent scan
+  (`docs/reviews/2026-04-24-user-intent-scan-phase-3.md` §B): nav
+  hover/active collision (fixed via rule 44), error `role="alert"`
+  standardization (fixed via rule 45), favicon (fixed via rule 43),
+  AppFooter motto i18n (fixed via rule 46), `LocationSlug` typed
+  union (deferred to TD-008 close-out).
+
+**Spec:** `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
+**Plan:** `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
+**Scan:** `docs/reviews/2026-04-24-user-intent-scan-phase-3.md`
+**Commits:** atomic Phase 3 commit (SHA to be filled in by controller
+after commit).
+
+---
+
 ## [2026-04-24] — Phase 2 (Nuxt 4 core configuration)
 
 Infrastructure-only phase. No user-visible surface yet — the output of this
@@ -124,8 +370,8 @@ against.
 
 **Spec:** `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
 **Plan:** `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
-**Commits:** atomic Phase 2 commit (SHA to be filled in by controller
-after commit).
+**Commits:** `a9d20d2` (Phase 2 atomic commit) · `218f9d8` (placeholder
+cleanup — replace `<phase-2-commit>` with real SHA in TECH_DEBT TD-006).
 
 ---
 
@@ -191,16 +437,22 @@ after commit).
 
 ## [Unreleased]
 
-### Planned (Phase 3+)
-- i18n content loading (locale JSON + DB-backed translations) — Phase 3
+### Planned (Phase 4+)
+- User auth flows wired end-to-end (login/logout/refresh/me BFF handlers
+  + Pinia user store + auth middleware + auth-gated pages) — Phase 4
+- DB-backed translations (`*_translations` tables) consumed by SSR via
+  `Accept-Language` header on `flaskFetch` — Phase 4+
+- `useFormattedDate` SSR-safe composable (TD-012) — Phase 4+
+- `livemagic` vs `--color-error` collision resolution (TD-013) —
+  Phase 4+ when a livemagic-themed route ships
 - Design-system consolidation (`docs/DESIGN.md`) — end of Phase 4 (TD-007)
-- User auth flows wired end-to-end (login/register/refresh/me + Pinia user
-  store) — Phase 4
-- Location management API + SSG pages with per-location theming — Phase 5
-- Event management API + ISR event pages — Phase 5
+- Location management API + SSG pages with per-location theming + content —
+  Phase 5
+- Event management API + ISR event pages + detail routes — Phase 5
 - Artist profiles API — Phase 5
-- Blog / News API + on-demand ISR revalidation — Phase 5
-- Admin dashboard (SPA, ssr: false) — Phase 6
+- Blog / News API + on-demand ISR revalidation (admin POST to
+  `/api/revalidate`) — Phase 5
+- Admin dashboard (SPA, `ssr: false`) — Phase 6
 - Google Calendar integration — Phase 7
 - Facebook posting integration — Phase 7
 - Patreon webhooks — Phase 7

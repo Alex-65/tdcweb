@@ -387,7 +387,7 @@ const onSubmit = handleSubmit(async (v) => {
       <label for="email" class="sr-only">Email</label>
       <input id="email" v-model="email" v-bind="emailAttrs" type="email"
              :aria-invalid="!!errors.email" :aria-describedby="errors.email && 'email-err'" />
-      <p v-if="errors.email" id="email-err" class="text-red-400 text-sm">{{ errors.email }}</p>
+      <p v-if="errors.email" id="email-err" class="text-error text-sm">{{ errors.email }}</p>
     </div>
     <!-- password similar -->
     <button :disabled="isSubmitting" type="submit">Sign in</button>
@@ -526,17 +526,29 @@ onBeforeUnmount(() => editor.value?.destroy())
 | `@click.prevent` on `<NuxtLink>` to change behavior | Use `<button>` with `@click` or drop `.prevent` — let NuxtLink navigate normally | Breaks routing semantics |
 | `console.log(...)` committed to code | Remove before commit; use `logger.info` for server routes | Noise in prod, perf hit |
 | Missing `:key` on `v-for` or using array index as key | Use a stable unique id: `:key="item.id"` | Incorrect DOM reuse on reorder |
+| `text-red-400` / `bg-red-500` (default Tailwind palette) on error surfaces | `text-error` / `bg-error` / `border-error` (semantic `--color-error` token) | Semantic state tokens, palette-agnostic, surfaces collisions explicitly (see playbook §14.5) |
+| Raw hex in template (`class="bg-[#0891b2]"`) | `@theme` token (`bg-primary`) | Per-location theming must cascade through CSS vars |
+| Error `<div>` without `role="alert"` | `<div role="alert" class="text-error">…</div>` | Screen-reader live-region announcement, playbook §23.2 |
+| `NuxtLink :to="/events/${id}"` without `useLocalePath` | `NuxtLink :to="localePath(\`/events/${id}\`)"` (already listed above; DOUBLE-ENFORCE this on dynamic paths) | IT/FR/ES deep links strip locale otherwise |
+| `pushNotification(...)` during SSR setup/template | Only inside event handlers (post-mount) | `crypto.randomUUID()` diverges server vs client — hydration mismatch (playbook §10.6) |
+| `gsap`/`Lenis` animation without `prefers-reduced-motion` guard | Check `window.matchMedia('(prefers-reduced-motion: reduce)').matches` and no-op | A11y mandate (WCAG 2.3.3) + three-layer discipline (playbook §9) |
+| New page/component without preemptive-polish checklist | Run through the 7-point pattern (playbook §23.1) from the first commit | Prevents design-system reviewer rework iterations |
 
 ---
 
 ## LOCATION THEMING (TDC-specific, compact)
 
-- 10 locations grouped in 3 moods: **Cosmic/Tech** (DreamersCave, DreamVision, Evanescence), **Hybrid** (LiveMagic, The Lounge), **Warm/Intimate** (Arquipélago, Noah's Ark, Jazz Club, etc.)
-- Each has CSS variables under `[data-location="<slug>"]` in `app/assets/css/main.css`: `--color-primary`, `--color-secondary`, `--color-accent`, `--color-dark`, `--gradient-hero`.
+- 10+ locations grouped in 3 moods: **Cosmic/Tech** (DreamersCave, DreamVision, Evanescence), **Hybrid** (LiveMagic, The Lounge), **Warm/Intimate** (Arquipélago, Noah's Ark, Jazz Club). 8/10 palettes live as of Phase 3; TD-008 tracks the remaining 2.
+- Each has CSS variables under `[data-location="<slug>"]` in `app/assets/css/main.css`: `--tdc-color-primary`, `--tdc-color-secondary`, `--tdc-color-accent`, `--tdc-gradient-hero`. `--tdc-color-dark` and `--tdc-color-surface` stay constant across locations (site chrome).
+- Semantic state token `--tdc-color-error: #ef4444` is palette-agnostic (NOT overridden per location). Consumed via `text-error` / `bg-error` / `border-error` utilities. Pattern for future semantic tokens: add to `@theme` + `:root` at first consumer-need, don't wait for DESIGN.md (TD-007) consolidation.
 - Apply via `useLocationTheme(slug)` composable → sets `body[data-location="..."]` through `useHead({ bodyAttrs })` — SSR-safe, zero flash.
-- Tailwind tokens reference the CSS vars (`primary: 'var(--color-primary)'`).
+- Tailwind v4 `@theme` tokens reference the CSS vars (`--color-primary: var(--tdc-color-primary)`).
 
-See playbook §14 for per-location palettes and mood philosophy.
+**Known palette issues (as of Phase 3 close):**
+- **TD-011** — jazzclub `text-primary` (#92400e) on `bg-dark` fails WCAG AA contrast. Trigger: first Phase 4+ jazzclub route.
+- **TD-013** — livemagic `--tdc-color-primary: #ef4444` collides with the global `--tdc-color-error: #ef4444`; error badges and primary CTAs render in the same red. Trigger: first Phase 4+ livemagic route with both a primary CTA and an error state.
+
+See playbook §§14, 14.5 for per-location palettes, semantic tokens, and mood philosophy.
 
 ---
 

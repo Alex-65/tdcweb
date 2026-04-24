@@ -15,35 +15,52 @@
  * baseURL is read per-call from runtimeConfig so env changes (dev vs prod)
  * don't require a server restart beyond the usual Nitro reload.
  *
- * Implementation note: `$fetch` and `useRuntimeConfig` are read off
- * `globalThis` rather than invoked as bare identifiers. In Nitro (prod)
- * both live on globalThis, so behavior is identical. In unit tests we
- * install the same names on globalThis, side-stepping the Nuxt
- * auto-import Vite transform that would otherwise rewrite the bare
- * identifiers into imports from `nuxt/app` (which require a running
- * Nuxt instance).
+ * Implementation note — stub-first + fallback-import pattern:
+ * Each dependency (`$fetch`, `useRuntimeConfig`) is resolved at call time
+ * through a helper that checks `globalThis` first, then falls back to a
+ * module-eval-time import (for `$fetch`) or throws an explicit error (for
+ * `useRuntimeConfig`, which has no clean module fallback). Vitest specs
+ * install globalThis stubs before importing this module, so the stubs win
+ * in tests. In prod, Nitro's bundle does not universally expose these on
+ * globalThis (Task 2.7 review confirmed h3 helpers live as regular module
+ * bindings in the dev build — the same applies to $fetch), so the imported
+ * ofetch `$fetch` provides a robust fallback. This mirrors the pattern in
+ * server/middleware/auth-forward.ts and server/utils/cookies.ts.
  */
 import type { H3Event } from 'h3'
+import { $fetch as ofetchImpl } from 'ofetch'
 
 type FetchFn = typeof $fetch
 type RuntimeConfigFn = () => { flaskUrl: string } & Record<string, unknown>
 
-const getFetch = (): FetchFn =>
-  (globalThis as unknown as { $fetch: FetchFn }).$fetch
+const resolveFetch = (): FetchFn => {
+  const stubbed = (globalThis as unknown as { $fetch?: FetchFn }).$fetch
+  return stubbed ?? (ofetchImpl as unknown as FetchFn)
+}
 
-const getRuntimeConfig = (): ReturnType<RuntimeConfigFn> =>
-  (globalThis as unknown as { useRuntimeConfig: RuntimeConfigFn }).useRuntimeConfig()
+const resolveRuntimeConfig = (): ReturnType<RuntimeConfigFn> => {
+  const stubbed = (globalThis as unknown as { useRuntimeConfig?: RuntimeConfigFn })
+    .useRuntimeConfig
+  if (!stubbed) {
+    throw new Error(
+      'flaskFetch: useRuntimeConfig is not available on globalThis; ' +
+        'flaskFetch must be called from a Nitro server route where ' +
+        'runtime config is bound',
+    )
+  }
+  return stubbed()
+}
 
 export const flaskFetch = <T = unknown>(
   url: string,
   event: H3Event,
   options: Parameters<typeof $fetch<T>>[1] = {},
 ): Promise<T> => {
-  const { flaskUrl } = getRuntimeConfig()
+  const { flaskUrl } = resolveRuntimeConfig()
   const flaskHeaders = (event.context.flaskHeaders ?? {}) as Record<string, string>
-  return getFetch()<T>(url, {
+  return resolveFetch()<T>(url, {
     baseURL: flaskUrl,
     ...options,
     headers: { ...flaskHeaders, ...(options.headers ?? {}) },
-  })
+  }) as Promise<T>
 }

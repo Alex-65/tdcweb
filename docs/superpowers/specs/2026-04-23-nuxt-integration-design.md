@@ -476,19 +476,53 @@ event's context.
 
 ```typescript
 // app/composables/useApi.ts
-export const useApi = () => {
+/**
+ * Extension of Nuxt $fetch options carrying a `_retry` marker that
+ * `onResponseError` uses to guard against infinite 401 retry loops.
+ * Derived from $fetch's own parameter type so it stays aligned with
+ * Nitro's NitroFetchOptions (which narrows `method` to a literal
+ * union, unlike ofetch's wider FetchOptions). Exported so tests can
+ * build typed mock contexts without `as any`.
+ */
+export type RetryableFetchOptions = NonNullable<Parameters<typeof $fetch>[1]> & { _retry?: boolean }
+
+export const useApi = (): ReturnType<typeof $fetch.create> => {
   return $fetch.create({
     credentials: 'include',
     async onResponseError({ response, request, options }) {
-      if (response.status === 401 && !options._retry) {
+      const opts = options as RetryableFetchOptions
+      if (response.status === 401 && !opts._retry) {
         await $fetch('/api/auth/refresh', { method: 'POST' })
-        options._retry = true
-        return useApi()(request, options)
+        opts._retry = true
+        return useApi()(request as string, opts)
       }
     },
   })
 }
 ```
+
+**Phase 3 clarifications (implementation codification).**
+
+The spec originally spelled the retry marker as `options._retry` with
+no type extension. Phase 3 Task 3.8 delivered the implementation with
+three binding refinements, now part of the contract:
+
+1. `RetryableFetchOptions` exported, derived from
+   `NonNullable<Parameters<typeof $fetch>[1]>`. Reviewer-Phase-2
+   feedback forbade `as any` casts on the retry marker. Deriving from
+   the `$fetch` parameter type rather than ofetch's `FetchOptions`
+   keeps `method` narrowed to the Nitro literal union.
+2. Retry path calls `useApi()(request, opts)` — the wrapper re-enters
+   itself so `credentials: 'include'` and any future interceptor
+   logic are preserved across the retried request. The `_retry` flag
+   set to `true` before the recursive call prevents infinite loops
+   (unit-tested in `tests/unit/useApi.test.ts`).
+3. Explicit `: ReturnType<typeof $fetch.create>` return type
+   annotation on `useApi()`. Without it TS7023 fires on the recursive
+   self-reference. The explicit annotation names the Nitro wrapper
+   type without importing internal aliases.
+
+These refinements are non-optional under TypeScript strict mode.
 
 ### 8.5 Auth-gated pages (dashboard / admin)
 
@@ -586,6 +620,15 @@ export default defineNuxtPlugin(() => {
 
 Disabling Lenis on admin/dashboard avoids smooth-scroll interference
 with data tables and form scroll-into-view.
+
+**Phase 3 addition — `prefers-reduced-motion` short-circuit.** When
+the media query `(prefers-reduced-motion: reduce)` matches, the
+plugin skips construction entirely and provides `{ lenis: null }`.
+This is a strictly-additive safety layer so wheel/touch smooth-scroll
+is never active for users who have opted out of animation. Consumers
+(`useSmoothScroll`, `useScrollAnimation`) also guard the same media
+query — the three-layer discipline is documented in
+`docs/frontend/nuxt-playbook.md §9`.
 
 ### 9.3 i18n + SSR
 

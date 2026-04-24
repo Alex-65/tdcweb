@@ -22,6 +22,16 @@
 import Lenis from 'lenis'
 
 export default defineNuxtPlugin((nuxtApp) => {
+  // Accessibility: respect `prefers-reduced-motion`. When the user has
+  // asked the system to reduce animation, do NOT instantiate Lenis at all.
+  // Smooth-scroll on wheel/touch would still interpolate scroll position
+  // regardless of per-call guards in useSmoothScroll. Consumers (e.g.
+  // useSmoothScroll.ts) rely on the optional chain `$lenis?.scrollTo(...)`
+  // to no-op when $lenis is null.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return { provide: { lenis: null as Lenis | null } }
+  }
+
   const lenis = new Lenis({
     duration: 1.2,
     smoothWheel: true,

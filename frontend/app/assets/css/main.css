@@ -23,6 +23,10 @@
   --color-dark: var(--tdc-color-dark);
   --color-surface: var(--tdc-color-surface);
 
+  /* Semantic-state token consumed via `text-error`, `bg-error`, `border-error` utilities.
+     Not overridden per location (error has universal meaning, palette-agnostic). */
+  --color-error: var(--tdc-color-error);
+
   /* Typography */
   --font-display: "Inter", "system-ui", sans-serif;
   --font-body: "Inter", "system-ui", sans-serif;
@@ -53,6 +57,7 @@
     --tdc-color-accent: #22c55e;
     --tdc-color-dark: #0c1222;
     --tdc-color-surface: #141420;
+    --tdc-color-error: #ef4444;
     --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
   }
 

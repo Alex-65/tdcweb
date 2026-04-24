@@ -28,6 +28,14 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  // Flat component naming regardless of subfolder. `common/AppHeader.vue`
+  // registers as `<AppHeader />`, not `<CommonAppHeader />`. Required for
+  // `app/layouts/default.vue` (Task 3.2) to resolve `<AppHeader />` and
+  // `<AppFooter />` at their planned `app/components/common/` locations.
+  components: [
+    { path: '~/components', pathPrefix: false },
+  ],
+
   typescript: {
     strict: true,
     typeCheck: false, // CI job only; don't slow dev HMR
@@ -97,7 +105,6 @@ export default defineNuxtConfig({
       redirectOn: 'root',
       alwaysRedirect: false,
     },
-    lazy: true,
     langDir: 'locales',
   },
 

@@ -185,12 +185,40 @@ The feature list is unchanged from v2 §11. The implementation phasing is re-cad
 | Phase | Scope | Status |
 |---|---|---|
 | **1** | Nuxt scaffold + Nuxt modules + runtime / test deps | ✅ Complete (commits `8be146c`, `0cb13ce`, `2091253`, `3b6aa99`, `dbebfc4`) |
-| **2** | Core configuration + BFF plumbing + theme substrate + test harness | ✅ Complete (this commit) |
-| **3** | Port 10 existing Vue files to Nuxt conventions + core composables + Pinia stores + i18n locale data | 📋 Planned |
-| **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | 📋 Planned |
+| **2** | Core configuration + BFF plumbing + theme substrate + test harness | ✅ Complete (commit `a9d20d2`) |
+| **3** | Port the public-facing Vue surface to Nuxt: app.vue + layout + error page + AppHeader + AppFooter + 3 public pages (home SSG, locations SSG, events ISR) + 4 composables (useApi, useScrollAnimation, useSmoothScroll, useLocationTheme) + 3 Pinia stores (auth/locale/ui) + 4 i18n locale JSON files (EN/IT/FR/ES) | ✅ Complete (this commit) |
+| **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | 📋 Next |
 | **5** | Docs + agent/skill updates for Nuxt 4 (some already done as prep work); finalize `pdp-v3.md` as source of truth | 🟡 In progress (this doc counts) |
 | **6** | Nginx + systemd production config + deploy workflow | 📋 Planned |
 | **7** | Phase-end smoke / E2E / Core Web Vitals verification | 📋 Planned |
+
+### Phase 3 highlights (2026-04-24)
+
+Phase 3 landed as 12 main tasks (3.0 through 3.11) plus 4 polish
+sub-tasks (3.2b, 3.3b, 3.5b, 3.6b) plus 2 typecheck-batch passes and
+5 controller-level phase-end micro-edits, all committed atomically.
+
+- **TD-009 closed** preemptively as Task 3.0 (`flask-client.ts`
+  resilient-pattern rewrite).
+- **TD-011 opened** (jazzclub palette chrome contrast regression
+  from the outline-login refactor, deferred to first jazzclub route).
+- **TD-012 opened** (`useFormattedDate` SSR-safe composable, driven
+  by Phase 4+ event detail / calendar needs).
+- **TD-013 opened** (`livemagic` primary collides with `--color-error`
+  semantic token, deferred to first livemagic route).
+- **New semantic token** `--color-error` added to `main.css`
+  `@theme` + `:root`. Pattern codified in playbook §14.5: add tokens
+  alongside first consumer, don't wait for design-system consolidation.
+- **Preemptive-polish 7-point pattern** formalized in playbook §23.1
+  after Task 3.7 shipped polished from the first commit (zero
+  reviewer-blocking findings).
+- **Three-layer reduced-motion discipline** (Lenis plugin + two
+  composables) per playbook §9.
+- **Flat component naming via `components.pathPrefix: false`** in
+  `nuxt.config.ts` to honour the plan's `<AppHeader />` (not
+  `<CommonAppHeader />`) while keeping the `common/` subdirectory.
+- 21/21 unit tests + 11/11 Playwright E2E (1920x1080) PASS; prod build
+  + SSR bundle audit confirm `gsap`/`lenis` absent from server chunks.
 
 Feature areas (each will become one or more spec + plan pairs under `docs/superpowers/`):
 - Landing page with Apple-style scroll storytelling (GSAP + ScrollTrigger + Lenis)

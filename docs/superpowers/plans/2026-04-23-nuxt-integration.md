@@ -1011,6 +1011,109 @@ git commit -m "feat(frontend): add shared TypeScript types (api, user, location,
 
 ## Phase 3 — Port existing files
 
+> **Phase-3 execution note.** All tasks below carry plan-authored
+> `git commit` blocks; during the actual Phase 3 run those commits
+> were **deferred** per CLAUDE.md rule 15 (no per-task commits). The
+> working tree accumulated across all tasks and was committed atomically
+> at phase end (rule 16). Treat the commit snippets as historical intent
+> only — not as instructions for any future subagent. The amendments
+> below capture the final shape of each deliverable; earlier drafts of
+> the same tasks in this plan are superseded inline.
+
+### Task 3.0: Preemptive rewrite of `flask-client.ts` (TD-009 close-out)
+
+**Files:**
+- Modify: `frontend/server/utils/flask-client.ts` (Phase 2 deliverable, rewritten)
+- Modify: `frontend/tests/unit/flask-client.test.ts` (extend to cover fallback + error paths)
+
+Inserted at the start of Phase 3, before Task 3.1. User-approved option
+(A) for TD-009 on 2026-04-24: preemptive resilient-pattern rewrite
+instead of waiting for a real Phase 4 SSR hit to surface the latent
+globalThis-only flaw.
+
+The Phase 2 implementation read `$fetch` and `useRuntimeConfig`
+exclusively from `globalThis`. Task 2.7 had already proven that Nitro
+does not universally expose h3 helpers on `globalThis` (`getCookie`
+lives as a regular module binding), so the same risk applied to
+`$fetch` and `useRuntimeConfig` in the prod bundle. Task 3.0 adopts
+the resilient pattern used by `auth-forward.ts` and `cookies.ts`:
+stub-first from `globalThis`, explicit fallback otherwise.
+
+- [x] **Step 1: Rewrite the util**
+
+The production shape:
+
+```typescript
+// frontend/server/utils/flask-client.ts
+import type { H3Event } from 'h3'
+import { $fetch as ofetchImpl } from 'ofetch'
+
+type FetchFn = typeof $fetch
+type RuntimeConfigFn = () => { flaskUrl: string } & Record<string, unknown>
+
+const resolveFetch = (): FetchFn => {
+  const stubbed = (globalThis as unknown as { $fetch?: FetchFn }).$fetch
+  return stubbed ?? (ofetchImpl as unknown as FetchFn)
+}
+
+const resolveRuntimeConfig = (): ReturnType<RuntimeConfigFn> => {
+  const stubbed = (globalThis as unknown as { useRuntimeConfig?: RuntimeConfigFn })
+    .useRuntimeConfig
+  if (!stubbed) {
+    throw new Error(
+      'flaskFetch: useRuntimeConfig is not available on globalThis; ' +
+        'flaskFetch must be called from a Nitro server route where ' +
+        'runtime config is bound',
+    )
+  }
+  return stubbed()
+}
+
+export const flaskFetch = <T = unknown>(
+  url: string,
+  event: H3Event,
+  options: Parameters<typeof $fetch<T>>[1] = {},
+): Promise<T> => {
+  const { flaskUrl } = resolveRuntimeConfig()
+  const flaskHeaders = (event.context.flaskHeaders ?? {}) as Record<string, string>
+  return resolveFetch()<T>(url, {
+    baseURL: flaskUrl,
+    ...options,
+    headers: { ...flaskHeaders, ...(options.headers ?? {}) },
+  }) as Promise<T>
+}
+```
+
+Rationale: `$fetch` has a clean module fallback (`ofetch` publishes
+`$fetch` as a named export identical to Nitro's auto-import).
+`useRuntimeConfig` has no clean module fallback — the function only
+exists inside a bound Nitro context — so a missing binding is an
+explicit thrown Error, not a silent fallback.
+
+- [x] **Step 2: Extend the test**
+
+Unit test `tests/unit/flask-client.test.ts` grows from 3 to 8
+assertions. New suites:
+
+- `describe('fallback: ofetch is used when globalThis.$fetch is absent')`
+  — deletes the globalThis stub, asserts the `ofetch` mock is invoked
+  with the expected baseURL + headers.
+- `describe('error: explicit failure when globalThis.useRuntimeConfig
+  is absent')` — deletes the globalThis stub, asserts
+  `flaskFetch(...)` throws with the typed error message.
+
+The pre-existing 3 happy-path assertions continue to use globalThis
+stubs (stub-first path).
+
+- [x] **Step 3: Close TD-009**
+
+Upon Phase 3 atomic commit landing, move TD-009 to "Closed items" in
+`docs/TECH_DEBT.md` with the resolving SHA.
+
+**No separate commit** — changes land in the Phase 3 atomic commit.
+
+---
+
 ### Task 3.1: Port `App.vue` → `app/app.vue`
 
 **Files:**
@@ -1030,7 +1133,7 @@ Write `/data1/tdcweb-dev/frontend/app/app.vue`:
 useHead({
   titleTemplate: (title) => (title ? `${title} — The Dreamer's Cave` : `The Dreamer's Cave — You Can See The Music`),
   htmlAttrs: { lang: 'en' },
-  link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+  link: [{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }],
 })
 
 useSeoMeta({
@@ -1046,17 +1149,20 @@ useSeoMeta({
 </template>
 ```
 
+**Phase 3 amendment.** The original draft referenced
+`/favicon.svg`, which does not yet exist under `frontend/public/`. The
+phase-end fix switched the href to `/favicon.ico` (shipped by the
+Nuxt scaffold). Reintroducing an SVG favicon is deferred to a future
+brand-assets task.
+
 - [ ] **Step 3: Dev server smoke test**
 
 Run: `cd /data1/tdcweb-dev/frontend && npm run dev` → open `http://localhost:9503` → expect no hydration errors. Kill.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Commit deferred**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/app.vue
-git commit -m "feat(frontend): port App.vue to Nuxt app/app.vue with useHead/useSeoMeta"
-```
+Per CLAUDE.md rule 15, no per-task commit. Changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1095,28 +1201,37 @@ const handleError = () => clearError({ redirect: '/' })
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-dark text-white">
-    <div class="text-center px-6">
+  <main class="min-h-screen flex items-center justify-center bg-dark text-white">
+    <div class="text-center px-6" role="alert">
       <h1 class="text-6xl font-display font-bold mb-4">{{ error.statusCode }}</h1>
-      <p class="text-xl mb-8">{{ error.statusMessage || 'Something went wrong' }}</p>
+      <p class="text-xl mb-8">{{ error.statusMessage || $t('errors.message_fallback') }}</p>
       <button
-        class="px-6 py-3 bg-primary hover:bg-secondary rounded-lg transition-colors"
+        class="px-6 py-3 bg-primary hover:bg-secondary rounded-lg transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-dark focus-visible:outline-none"
         @click="handleError"
       >
-        Back to home
+        {{ $t('errors.back_to_home') }}
       </button>
     </div>
-  </div>
+  </main>
 </template>
 ```
 
-- [ ] **Step 3: Commit**
+**Phase 3 amendment (Task 3.2b polish pass).** The original draft used
+a `<div>` root with English literals and no accessibility landmarks.
+Post-review fixes:
+- Root switched to `<main>` (page landmark, one per document — this
+  is the global error page, not nested inside the default layout).
+- `role="alert"` on the inner container so screen readers announce the
+  error as a live region.
+- Copy bound to `$t('errors.message_fallback')` / `$t('errors.back_to_home')`
+  across EN/IT/FR/ES (keys seeded in Task 3.4 Steps 2-5).
+- Focus-visible ring on the CTA per the pattern-library checklist
+  (playbook §23.1 point 6).
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/layouts/ frontend/app/error.vue
-git commit -m "feat(frontend): add default layout and global error page"
-```
+- [ ] **Step 3: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1153,17 +1268,17 @@ const availableLocales = computed(() =>
       </NuxtLink>
 
       <nav class="hidden md:flex items-center gap-8">
-        <NuxtLink :to="localePath('/locations')">{{ $t('nav.locations') }}</NuxtLink>
-        <NuxtLink :to="localePath('/events')">{{ $t('nav.events') }}</NuxtLink>
-        <NuxtLink :to="localePath('/artists')">{{ $t('nav.artists') }}</NuxtLink>
-        <NuxtLink :to="localePath('/blog')">{{ $t('nav.blog') }}</NuxtLink>
+        <NuxtLink :to="localePath('/locations')" class="hover:text-primary transition-colors" active-class="text-primary font-bold">{{ $t('nav.locations') }}</NuxtLink>
+        <NuxtLink :to="localePath('/events')" class="hover:text-primary transition-colors" active-class="text-primary font-bold">{{ $t('nav.events') }}</NuxtLink>
+        <NuxtLink :to="localePath('/artists')" class="hover:text-primary transition-colors" active-class="text-primary font-bold">{{ $t('nav.artists') }}</NuxtLink>
+        <NuxtLink :to="localePath('/blog')" class="hover:text-primary transition-colors" active-class="text-primary font-bold">{{ $t('nav.blog') }}</NuxtLink>
       </nav>
 
       <div class="flex items-center gap-4">
         <select
           :value="locale"
           class="bg-transparent border border-white/20 rounded px-2 py-1 text-sm"
-          @change="(e) => setLocale((e.target as HTMLSelectElement).value as typeof locale.value)"
+          @change="(e) => setLocale((e.target as HTMLSelectElement).value as typeof locale)"
         >
           <option :value="locale">{{ locale.toUpperCase() }}</option>
           <option v-for="l in availableLocales" :key="l.code" :value="l.code">
@@ -1173,7 +1288,7 @@ const availableLocales = computed(() =>
 
         <NuxtLink
           :to="localePath('/auth/login')"
-          class="px-4 py-2 bg-primary hover:bg-secondary rounded transition-colors text-sm"
+          class="px-4 py-2 border border-primary text-primary hover:bg-primary hover:text-white rounded transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-dark"
         >
           {{ $t('nav.login') }}
         </NuxtLink>
@@ -1183,32 +1298,75 @@ const availableLocales = computed(() =>
 </template>
 ```
 
+**Phase 3 amendments (Tasks 3.3, 3.3b, phase-end micro-edits).**
+
+- **Login button: outline style.** The original draft used filled
+  `bg-primary hover:bg-secondary + text-white`. Task 3.3b design-system
+  review flagged WCAG AA contrast failures on 5/8 palettes. User chose
+  option (iii) — outline with `border-primary text-primary` resting,
+  filled on hover. Outline passes AA on 7/8 palettes; jazzclub is the
+  only regression (TD-011).
+- **Nav hover + active differentiation.** Each nav `NuxtLink` gained
+  `hover:text-primary transition-colors` and
+  `active-class="text-primary font-bold"`. The `font-bold` on active
+  (not just colour) resolves the hover/active visual collision caught
+  in scan row 36 — on `/events` hovering `/locations` now shows active
+  bold + primary vs hover non-bold + primary.
+- **Focus-visible ring on login CTA.** Pattern-library §23.1 point 6
+  chain: 5 `focus-visible:*` classes.
+- **Type narrowing on setLocale.** The `@change` handler casts the
+  target value to `typeof locale` (not `typeof locale.value`); in Vue
+  templates `locale` from `useI18n()` auto-unwraps the ref, so the
+  template-level type is `string`, not `Ref<string>`. F1 HIGH fix from
+  typecheck batch (scan row 40).
+
 - [ ] **Step 3: Write app/components/common/AppFooter.vue**
 
 Write `/data1/tdcweb-dev/frontend/app/components/common/AppFooter.vue`:
 
 ```vue
+<script setup lang="ts">
+// Computed at script-setup time (both SSR and client). On the server
+// this runs at request time; on the client it runs at hydration time.
+// For the overwhelming majority of the year the two agree. The
+// 1-second window at midnight on 31 Dec -> 1 Jan where they could
+// differ is an accepted edge per CLAUDE.md SSR Rule #4 discussion;
+// fixing requires either app-config hardcoding (yearly maintenance)
+// or a build-time constant baked in.
+const year = new Date().getFullYear()
+</script>
+
 <template>
   <footer class="border-t border-white/10 bg-dark">
     <div class="max-w-7xl mx-auto px-6 py-8 text-sm text-white/70">
       <div class="flex flex-col md:flex-row justify-between gap-4">
-        <div>© {{ new Date().getFullYear() }} The Dreamer's Cave</div>
-        <div class="italic">You Can See The Music</div>
+        <div>© {{ year }} The Dreamer's Cave</div>
+        <div class="italic">{{ $t('home.hero_title') }}</div>
       </div>
     </div>
   </footer>
 </template>
 ```
 
-Note: `new Date().getFullYear()` is stable across SSR and hydration (doesn't change during a session), so it does not trigger hydration mismatch.
+**Phase 3 amendments.**
 
-- [ ] **Step 4: Commit**
+- **Year hoisted to `<script setup>`.** The original draft used
+  `{{ new Date().getFullYear() }}` inline in the template with a note
+  claiming "stable across SSR and hydration". **CLAUDE.md SSR Rule #4
+  is NON-NEGOTIABLE** — `new Date()` in templates is forbidden. The
+  year is computed once in script-setup and interpolated as a plain
+  string. SSR HTML is byte-identical to the original intent.
+- **Motto via i18n.** The literal "You Can See The Music" was
+  replaced with `$t('home.hero_title')`. Since the hero title is
+  identical to the motto in every locale, AppFooter reuses the existing
+  key instead of duplicating strings under a `common.motto` namespace
+  (pragmatic DRY; if divergence between hero title and footer motto
+  emerges, extract to `common.motto` then).
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/components/common/
-git commit -m "feat(frontend): port AppHeader and AppFooter to Nuxt with i18n locale switching"
-```
+- [ ] **Step 4: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1240,7 +1398,35 @@ Write `/data1/tdcweb-dev/frontend/i18n/locales/en.json`:
   },
   "home": {
     "hero_title": "You Can See The Music",
-    "hero_subtitle": "A virtual music club in Second Life"
+    "hero_subtitle": "A virtual music club in Second Life",
+    "seo": {
+      "description": "A virtual music club in Second Life: 10 themed venues, live music, immersive events.",
+      "og_description": "Virtual music club in Second Life since 2019"
+    }
+  },
+  "locations": {
+    "title": "Locations",
+    "empty": "No locations available",
+    "seo": {
+      "description": "Discover the 10 themed venues of The Dreamer's Cave in Second Life."
+    },
+    "error": {
+      "load_failed": "Could not load locations"
+    }
+  },
+  "events": {
+    "title": "Events",
+    "empty": "No upcoming events",
+    "seo": {
+      "description": "Upcoming live music events at The Dreamer's Cave."
+    },
+    "error": {
+      "load_failed": "Could not load events"
+    }
+  },
+  "errors": {
+    "message_fallback": "Something went wrong",
+    "back_to_home": "Back to home"
   }
 }
 ```
@@ -1260,7 +1446,35 @@ Write `/data1/tdcweb-dev/frontend/i18n/locales/it.json`:
   },
   "home": {
     "hero_title": "Puoi vedere la musica",
-    "hero_subtitle": "Un music club virtuale in Second Life"
+    "hero_subtitle": "Un music club virtuale in Second Life",
+    "seo": {
+      "description": "Un music club virtuale in Second Life: 10 venue a tema, musica dal vivo, eventi immersivi.",
+      "og_description": "Music club virtuale in Second Life dal 2019"
+    }
+  },
+  "locations": {
+    "title": "Location",
+    "empty": "Nessuna location disponibile",
+    "seo": {
+      "description": "Scopri le 10 venue a tema del The Dreamer's Cave in Second Life."
+    },
+    "error": {
+      "load_failed": "Impossibile caricare le location"
+    }
+  },
+  "events": {
+    "title": "Eventi",
+    "empty": "Nessun evento in programma",
+    "seo": {
+      "description": "Eventi musicali dal vivo in programma al The Dreamer's Cave."
+    },
+    "error": {
+      "load_failed": "Impossibile caricare gli eventi"
+    }
+  },
+  "errors": {
+    "message_fallback": "Qualcosa è andato storto",
+    "back_to_home": "Torna alla home"
   }
 }
 ```
@@ -1280,7 +1494,35 @@ Write `/data1/tdcweb-dev/frontend/i18n/locales/fr.json`:
   },
   "home": {
     "hero_title": "Vous pouvez voir la musique",
-    "hero_subtitle": "Un club de musique virtuel dans Second Life"
+    "hero_subtitle": "Un club de musique virtuel dans Second Life",
+    "seo": {
+      "description": "Un club de musique virtuel dans Second Life : 10 lieux thématiques, musique live, événements immersifs.",
+      "og_description": "Club de musique virtuel dans Second Life depuis 2019"
+    }
+  },
+  "locations": {
+    "title": "Lieux",
+    "empty": "Aucun lieu disponible",
+    "seo": {
+      "description": "Découvrez les 10 lieux thématiques de The Dreamer's Cave dans Second Life."
+    },
+    "error": {
+      "load_failed": "Impossible de charger les lieux"
+    }
+  },
+  "events": {
+    "title": "Événements",
+    "empty": "Aucun événement à venir",
+    "seo": {
+      "description": "Événements musicaux live à venir au The Dreamer's Cave."
+    },
+    "error": {
+      "load_failed": "Impossible de charger les événements"
+    }
+  },
+  "errors": {
+    "message_fallback": "Une erreur est survenue",
+    "back_to_home": "Retour à l'accueil"
   }
 }
 ```
@@ -1300,18 +1542,50 @@ Write `/data1/tdcweb-dev/frontend/i18n/locales/es.json`:
   },
   "home": {
     "hero_title": "Puedes ver la música",
-    "hero_subtitle": "Un club de música virtual en Second Life"
+    "hero_subtitle": "Un club de música virtual en Second Life",
+    "seo": {
+      "description": "Un club de música virtual en Second Life: 10 sedes temáticas, música en vivo, eventos inmersivos.",
+      "og_description": "Club de música virtual en Second Life desde 2019"
+    }
+  },
+  "locations": {
+    "title": "Lugares",
+    "empty": "No hay lugares disponibles",
+    "seo": {
+      "description": "Descubre los 10 lugares temáticos de The Dreamer's Cave en Second Life."
+    },
+    "error": {
+      "load_failed": "No se pudieron cargar los lugares"
+    }
+  },
+  "events": {
+    "title": "Eventos",
+    "empty": "No hay eventos próximos",
+    "seo": {
+      "description": "Próximos eventos de música en vivo en The Dreamer's Cave."
+    },
+    "error": {
+      "load_failed": "No se pudieron cargar los eventos"
+    }
+  },
+  "errors": {
+    "message_fallback": "Algo salió mal",
+    "back_to_home": "Volver al inicio"
   }
 }
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit deferred**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/i18n/
-git commit -m "feat(frontend): seed i18n locale files (EN/IT/FR/ES)"
-```
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
+
+**Phase 3 amendments.** Steps 2-5 of this task were amended mid-phase
+(controller-level pre-flight edits, 2026-04-24) to add the `home.seo.*`,
+`errors.*`, `locations.*`, and `events.*` namespaces in all 4 locales.
+Task 3.2b, 3.5b, 3.6b, and 3.7 consumed those keys. Final shape: 9
+namespaces × 4 locales = 36 translations landed in Phase 3. See
+`frontend/i18n/locales/{en,it,fr,es}.json` for the merged state.
 
 ---
 
@@ -1334,27 +1608,49 @@ Write `/data1/tdcweb-dev/frontend/app/pages/index.vue`:
 const { t } = useI18n()
 
 useSeoMeta({
-  title: 'The Dreamer\'s Cave — You Can See The Music',
-  description: 'A virtual music club in Second Life: 10 themed venues, live music, immersive events.',
+  title: t('home.hero_title'),
+  description: t('home.seo.description'),
   ogTitle: 'The Dreamer\'s Cave',
-  ogDescription: 'Virtual music club in Second Life since 2019',
+  ogDescription: t('home.seo.og_description'),
   ogType: 'website',
 })
 </script>
 
 <template>
-  <section class="min-h-screen flex items-center justify-center bg-hero-gradient">
-    <div class="text-center px-6">
+  <section class="relative min-h-screen flex items-center justify-center bg-hero-gradient">
+    <div class="absolute inset-0 bg-dark/40 pointer-events-none" aria-hidden="true"></div>
+    <div class="relative text-center px-6">
       <h1 class="text-6xl md:text-8xl font-display font-bold mb-6">
         {{ t('home.hero_title') }}
       </h1>
-      <p class="text-xl md:text-2xl text-white/80">
+      <p class="text-2xl text-white/80">
         {{ t('home.hero_subtitle') }}
       </p>
     </div>
   </section>
 </template>
 ```
+
+**Phase 3 amendments (Task 3.5b + phase-end subtitle micro-edit).**
+
+- **SEO meta via i18n.** The original draft hardcoded English in
+  `useSeoMeta`. Per scan row 20, user approved option (X): add
+  `home.seo.description` + `home.seo.og_description` to all 4 locales
+  (done in Task 3.4) + bind `useSeoMeta` through `t(...)`. `ogTitle`
+  stays literal `"The Dreamer's Cave"` — brand-integrity.
+- **Dark scrim over hero gradient.** Task 3.5 design-system reviewer
+  finding F1 [HIGH]: white hero text on `bg-hero-gradient` failed
+  WCAG AA contrast on 5/8 palettes (dreamerscave, dreamvision,
+  noahsark, livemagic, jazzclub). User approved option (1): dark
+  scrim. Added `absolute inset-0 bg-dark/40 pointer-events-none
+  aria-hidden="true"` scrim div behind content, repositioned
+  content wrapper with `relative z-10`. Wrapper `<section>` now
+  has `relative` so the scrim establishes the stacking context.
+- **Subtitle upgraded to `text-2xl`.** Phase 3 micro-edit (scan row
+  21). Original `text-xl md:text-2xl` (20px at mobile) still failed
+  AA-normal on yellow-biased palettes even after the 40% scrim.
+  `text-2xl` (24px) qualifies AA-large (3:1), which passes for all
+  8 palettes post-scrim. One-word removal (`text-xl md:` dropped).
 
 - [ ] **Step 3: SSR verification**
 
@@ -1367,13 +1663,10 @@ kill %1
 ```
 Expected: `>= 1` (title present in SSR HTML).
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Commit deferred**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/pages/index.vue
-git commit -m "feat(frontend): port HomePage to pages/index.vue (SSG with i18n + SEO meta)"
-```
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1390,47 +1683,74 @@ Write `/data1/tdcweb-dev/frontend/app/pages/locations/index.vue`:
 <script setup lang="ts">
 import type { Location } from '~/types/location'
 
+const { t } = useI18n()
+const localePath = useLocalePath()
+
 const { data: locations, error } = await useFetch<Location[]>('/api/locations', {
   key: 'locations-list',
 })
 
 useSeoMeta({
-  title: 'Locations',
-  description: 'Discover the 10 themed venues of The Dreamer\'s Cave in Second Life.',
+  title: t('locations.title'),
+  description: t('locations.seo.description'),
 })
 </script>
 
 <template>
   <section class="max-w-7xl mx-auto px-6 py-16">
-    <h1 class="text-5xl font-display font-bold mb-12">Locations</h1>
+    <h1 class="text-5xl font-display font-bold mb-12">{{ t('locations.title') }}</h1>
 
-    <div v-if="error" class="text-red-400">
-      Could not load locations: {{ error.statusMessage }}
+    <div v-if="error" role="alert" class="text-error">
+      {{ t('locations.error.load_failed') }}: {{ error.statusMessage }}
     </div>
 
-    <div v-else-if="locations" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div v-else-if="locations && locations.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <article
         v-for="location in locations"
         :key="location.id"
         class="border border-white/10 rounded-lg overflow-hidden hover:border-primary transition-colors"
       >
-        <NuxtLink :to="`/locations/${location.slug}`" class="block p-6">
+        <NuxtLink
+          :to="localePath(`/locations/${location.slug}`)"
+          class="block p-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-dark"
+        >
           <h2 class="text-2xl font-display font-bold mb-2">{{ location.name }}</h2>
-          <p class="text-white/70">{{ location.description }}</p>
+          <p v-if="location.description" class="text-white/70">{{ location.description }}</p>
         </NuxtLink>
       </article>
+    </div>
+
+    <div v-else class="text-white/70">
+      {{ t('locations.empty') }}
     </div>
   </section>
 </template>
 ```
 
-- [ ] **Step 2: Commit**
+**Phase 3 amendments (Task 3.6b polish pass + phase-end micro-edits).**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/pages/locations/index.vue
-git commit -m "feat(frontend): port Locations page with useFetch SSR"
-```
+- **i18n throughout.** `useSeoMeta`, `<h1>`, the error message, and the
+  empty state all bind through `t('locations.*')`. Keys seeded in Task
+  3.4.
+- **Semantic error token.** `text-red-400` replaced with `text-error`
+  (`--color-error` token, added in the same Task 3.6b per §14.5
+  playbook semantic-token pattern).
+- **Three-state template.** `v-if="error"` → `v-else-if="locations && locations.length"`
+  → `v-else` (empty). The original draft had no empty-state branch.
+- **Null-guard description.** `<p v-if="location.description">` avoids
+  rendering an empty paragraph for locations with no description.
+- **`useLocalePath()` wrap on NuxtLink.** Controller micro-edit (scan
+  row 25). Without it, IT/FR/ES deep links would strip their locale
+  prefix (functional i18n bug caught by design-system reviewer).
+- **`role="alert"` on error branch.** Phase-end micro-edit (scan row
+  45). Screen-reader live-region announcement, consistent with
+  `error.vue`.
+- **Focus-visible ring on card link.** Pattern-library §23.1 point 6.
+
+- [ ] **Step 2: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1447,46 +1767,65 @@ Write `/data1/tdcweb-dev/frontend/app/pages/events/index.vue`:
 <script setup lang="ts">
 import type { Event } from '~/types/event'
 
+const { t } = useI18n()
+
 const { data: events, error } = await useFetch<Event[]>('/api/events', {
   key: 'events-list',
   query: { upcoming: 'true' },
 })
 
 useSeoMeta({
-  title: 'Events',
-  description: 'Upcoming live music events at The Dreamer\'s Cave.',
+  title: t('events.title'),
+  description: t('events.seo.description'),
 })
 </script>
 
 <template>
   <section class="max-w-7xl mx-auto px-6 py-16">
-    <h1 class="text-5xl font-display font-bold mb-12">Events</h1>
+    <h1 class="text-5xl font-display font-bold mb-12">{{ t('events.title') }}</h1>
 
-    <div v-if="error" class="text-red-400">
-      Could not load events: {{ error.statusMessage }}
+    <div v-if="error" role="alert" class="text-error">
+      {{ t('events.error.load_failed') }}: {{ error.statusMessage }}
     </div>
 
-    <ul v-else-if="events" class="space-y-4">
+    <ul v-else-if="events && events.length" class="space-y-4">
       <li
         v-for="event in events"
         :key="event.id"
-        class="border border-white/10 rounded p-6"
+        class="border border-white/10 rounded-lg p-6"
       >
-        <h2 class="text-2xl font-display font-bold">{{ event.title }}</h2>
-        <time class="text-white/60 text-sm">{{ event.starts_at }}</time>
+        <h2 class="text-2xl font-display font-bold mb-1">{{ event.title }}</h2>
+        <time :datetime="event.starts_at" class="text-white/60 text-sm">{{ event.starts_at }}</time>
       </li>
     </ul>
+
+    <div v-else class="text-white/70">
+      {{ t('events.empty') }}
+    </div>
   </section>
 </template>
 ```
 
-- [ ] **Step 2: Commit**
+**Phase 3 amendments (Task 3.7 preemptive polish + phase-end micro-edit).**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/pages/events/index.vue
-git commit -m "feat(frontend): port Events page with ISR (routeRules swr 5min)"
-```
+Task 3.7 was the first task to ship the full preemptive-polish
+pattern (playbook §23.1). Design-system reviewer flagged zero blocking
+findings. Delta vs the original draft:
+
+- **i18n everywhere.** `useSeoMeta`, `<h1>`, error, empty all via
+  `t('events.*')`.
+- **`text-error` + `role="alert"`.** `role="alert"` added as a
+  phase-end micro-edit (scan row 45) for consistency with
+  locations + error.vue.
+- **Empty-state branch.** `v-else` with `t('events.empty')`.
+- **`<time :datetime="...">` machine-readable.** Raw ISO 8601 is both
+  the visible text and the `datetime` attribute. Developer-shaped;
+  user-friendly formatting deferred to `useFormattedDate` (TD-012).
+
+- [ ] **Step 2: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1502,11 +1841,12 @@ Write `/data1/tdcweb-dev/frontend/tests/unit/useApi.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { FetchContext } from 'ofetch'
 
 const createMock = vi.fn()
-;(globalThis as any).$fetch = { create: createMock }
+;(globalThis as unknown as { $fetch: { create: typeof createMock } }).$fetch = { create: createMock }
 
-import { useApi } from '../../app/composables/useApi'
+import { useApi, type RetryableFetchOptions } from '../../app/composables/useApi'
 
 describe('useApi', () => {
   beforeEach(() => {
@@ -1532,38 +1872,40 @@ describe('useApi', () => {
   it('onResponseError triggers refresh and retries once on 401', async () => {
     const refreshFetch = vi.fn().mockResolvedValue({})
     const retriedFetch = vi.fn().mockResolvedValue({ ok: true })
-    ;(globalThis as any).$fetch = Object.assign(
+    ;(globalThis as unknown as { $fetch: unknown }).$fetch = Object.assign(
       (url: string) => url === '/api/auth/refresh' ? refreshFetch(url) : retriedFetch(url),
       { create: createMock },
     )
 
     useApi()
     const opts = createMock.mock.calls[0]![0]
+    const options: RetryableFetchOptions = {}
     const context = {
       response: { status: 401 },
       request: '/api/foo',
-      options: {} as any,
-    }
+      options,
+    } as unknown as FetchContext & { response: { status: number } }
     await opts.onResponseError(context)
 
     expect(refreshFetch).toHaveBeenCalledWith('/api/auth/refresh')
-    expect(context.options._retry).toBe(true)
+    expect(options._retry).toBe(true)
   })
 
   it('onResponseError does NOT retry when already retried', async () => {
     const refreshFetch = vi.fn()
-    ;(globalThis as any).$fetch = Object.assign(
+    ;(globalThis as unknown as { $fetch: unknown }).$fetch = Object.assign(
       () => refreshFetch(),
       { create: createMock },
     )
 
     useApi()
     const opts = createMock.mock.calls[0]![0]
+    const options: RetryableFetchOptions = { _retry: true }
     const context = {
       response: { status: 401 },
       request: '/api/foo',
-      options: { _retry: true } as any,
-    }
+      options,
+    } as unknown as FetchContext & { response: { status: number } }
     await opts.onResponseError(context)
     expect(refreshFetch).not.toHaveBeenCalled()
   })
@@ -1580,32 +1922,65 @@ Expected: module not found.
 Write `/data1/tdcweb-dev/frontend/app/composables/useApi.ts`:
 
 ```typescript
-export const useApi = () => {
+/**
+ * Extension of Nuxt $fetch options carrying a `_retry` marker that
+ * `onResponseError` uses to guard against infinite 401 retry loops.
+ * Exported so tests can build typed mock contexts without `as any`.
+ *
+ * Derived from $fetch's own parameter type so it stays aligned with
+ * Nitro's NitroFetchOptions (which narrows `method` to a literal union,
+ * unlike ofetch's wider FetchOptions).
+ */
+export type RetryableFetchOptions = NonNullable<Parameters<typeof $fetch>[1]> & { _retry?: boolean }
+
+// Return type annotated explicitly: the `onResponseError` handler
+// recursively references `useApi()` in its retry path (spec §8.4 -- retry
+// must re-enter the wrapper so `credentials: 'include'` and any future
+// interceptor logic are preserved). Without the annotation TS7023 fires
+// because the inferred type depends on itself. `ReturnType<typeof $fetch.create>`
+// names the Nitro wrapper type without importing internal aliases.
+export const useApi = (): ReturnType<typeof $fetch.create> => {
   return $fetch.create({
     credentials: 'include',
     async onResponseError({ response, request, options }) {
-      if (response.status === 401 && !(options as any)._retry) {
+      const opts = options as RetryableFetchOptions
+      if (response.status === 401 && !opts._retry) {
         await $fetch('/api/auth/refresh', { method: 'POST' })
-        ;(options as any)._retry = true
-        return $fetch(request as string, options as any)
+        opts._retry = true
+        return useApi()(request as string, opts)
       }
     },
   })
 }
 ```
 
+**Phase 3 amendments (intent codification, rule 19; typecheck batch F2;
+MED batch F5).**
+
+1. **`RetryableFetchOptions` derived from `NonNullable<Parameters<typeof
+   $fetch>[1]>`** rather than ofetch's `FetchOptions`. Reason: Nitro's
+   `$fetch` parameter type narrows `method` to a literal union, while
+   ofetch's `FetchOptions` widens it to `string`. Under strict mode the
+   narrow type is what reviewer-Phase-2 feedback required.
+2. **Retry path calls `useApi()(request, opts)`, not `$fetch(request,
+   opts)`.** Alignment to spec §8.4: the wrapper must re-enter itself so
+   `credentials: 'include'` and any future interceptor logic are
+   preserved on the retried request. The `_retry` flag set to `true`
+   before the recursive call prevents infinite loops
+   (unit-tested). F5 MED fix in scan row 41.
+3. **Explicit `: ReturnType<typeof $fetch.create>` return type.**
+   Required to break the TS7023 recursive-inference cycle introduced
+   by `useApi()(...)` in the retry path.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd /data1/tdcweb-dev/frontend && npm test -- useApi`
 Expected: 4 tests pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit deferred**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/composables/useApi.ts frontend/tests/unit/useApi.test.ts
-git commit -m "feat(frontend): add useApi composable with 401 auto-refresh and tests"
-```
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1671,6 +2046,14 @@ export const useUiStore = defineStore('ui', () => {
   const toggleMobileMenu = () => { isMobileMenuOpen.value = !isMobileMenuOpen.value }
   const closeMobileMenu = () => { isMobileMenuOpen.value = false }
 
+  /**
+   * Push a notification onto the stack.
+   *
+   * @warning Do NOT call during SSR setup() or template interpolation.
+   * Uses `crypto.randomUUID()` which produces different IDs on server vs
+   * client, causing hydration mismatch. Safe for user-triggered actions
+   * (button clicks, API error handlers, form submissions post-mount).
+   */
   const pushNotification = (n: Omit<Notification, 'id'>) => {
     notifications.value.push({ ...n, id: crypto.randomUUID() })
   }
@@ -1686,13 +2069,18 @@ export const useUiStore = defineStore('ui', () => {
 })
 ```
 
-- [ ] **Step 4: Commit**
+**Phase 3 amendment.** `pushNotification()` was flagged by the MED
+batch review (scan row 32) for SSR risk: `crypto.randomUUID()` produces
+different values on server vs client, so calling it during SSR setup
+or template interpolation would cause hydration mismatch. The JSDoc
+`@warning` codifies the constraint; the runtime behaviour is safe as
+long as callers only trigger the action from event handlers. Playbook
+§10.6 expands this into a general rule for SSR-unsafe actions.
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/stores/
-git commit -m "feat(frontend): split Pinia store into auth, locale, ui domain modules"
-```
+- [ ] **Step 4: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1713,6 +2101,11 @@ export function useScrollAnimation() {
 
   const animateReveal = (selector: string, options: Record<string, unknown> = {}) => {
     if (!import.meta.client) return
+    // Respect user accessibility preference: skip reveal entirely when the
+    // system signals reduced motion. Elements render at their natural CSS
+    // state (no translate, no fade-in), consistent with the intent of the
+    // prefers-reduced-motion media query.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const { $gsap } = useNuxtApp() as unknown as { $gsap: typeof gsap }
     ctx.value = $gsap.context(() => {
       $gsap.from(selector, {
@@ -1739,13 +2132,20 @@ export function useScrollAnimation() {
 }
 ```
 
-- [ ] **Step 2: Commit**
+**Phase 3 amendment (Task 3.10b controller micro-edit).** Original
+draft had no `prefers-reduced-motion` guard — any Phase 4+ consumer
+calling `animateReveal` would play the reveal regardless of user
+preference. 3-line early-return guard added inline
+(`if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return`)
+between the `import.meta.client` check and the `useNuxtApp()` call.
+This is one of the three layers of the reduced-motion discipline —
+see playbook §9 for the full pattern (Lenis plugin skips construction,
+`useScrollAnimation` no-ops, `useSmoothScroll` no-ops).
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/composables/useScrollAnimation.ts
-git commit -m "feat(frontend): add useScrollAnimation composable (SSR-safe, gsap.context cleanup)"
-```
+- [ ] **Step 2: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 
@@ -1765,6 +2165,10 @@ import type Lenis from 'lenis'
 export function useSmoothScroll() {
   const scrollTo = (target: string | HTMLElement, options?: { offset?: number }) => {
     if (!import.meta.client) return
+    // Respect user accessibility preference: skip programmatic smooth scroll
+    // when reduced-motion is requested. Consumer fallback is browser-native
+    // scrollIntoView / location hash if needed; this composable simply no-ops.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const { $lenis } = useNuxtApp() as unknown as { $lenis: Lenis }
     $lenis?.scrollTo(target, options)
   }
@@ -1772,6 +2176,14 @@ export function useSmoothScroll() {
   return { scrollTo }
 }
 ```
+
+**Phase 3 amendment.** Task 3.11 preemptively included the
+reduced-motion guard (learning from Task 3.10b retrospective
+application). The guard combines with the Lenis plugin's own
+reduced-motion short-circuit (see Phase 2 / Task 2.5 / playbook §9) —
+when the user has opted out, Lenis is never constructed, so
+`$lenis?.scrollTo(...)` additionally no-ops via optional chaining.
+Belt-and-braces.
 
 - [ ] **Step 2: Write useLocationTheme.ts**
 
@@ -1789,13 +2201,18 @@ export function useLocationTheme(slug: Ref<string | null | undefined> | string |
 }
 ```
 
-- [ ] **Step 3: Commit**
+**Phase 3 note.** No Phase 3 page exercises per-location theming
+(home, locations list, events list are all `:root` palette). The
+composable is the future bridge: when Phase 4+ detail routes land
+(`/locations/[slug]`, potentially `/events/[slug]`), they will call
+`useLocationTheme(computed(() => data.value?.location_slug))` to stamp
+`body[data-location="..."]` and trigger the `main.css` palette
+override. Unknown slugs fall back to `:root` without visual breakage.
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/composables/useSmoothScroll.ts frontend/app/composables/useLocationTheme.ts
-git commit -m "feat(frontend): add useSmoothScroll and useLocationTheme composables"
-```
+- [ ] **Step 3: Commit deferred**
+
+Per CLAUDE.md rule 15, no per-task commit — changes accumulate in the
+working tree until the Phase 3 atomic commit.
 
 ---
 

@@ -28,7 +28,7 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 **Project:** tdcweb - The Dreamer's Cave Virtual Music Club Website
 **Domain:** thedreamerscave.club
 **Motto:** "You Can See The Music"
-**Last Updated**: 2026-04-24 (Phase 2 — Nuxt 4 core configuration)
+**Last Updated**: 2026-04-24 (Phase 3 — Nuxt 4 frontend port: public pages, components, composables, Pinia stores, i18n content)
 
 ## 🚨 CRITICAL DEVELOPMENT PRINCIPLES
 
