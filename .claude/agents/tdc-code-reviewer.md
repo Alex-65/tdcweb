@@ -76,7 +76,7 @@ Verify the implementation matches the spec / plan EXACTLY.
 
 1. `docs/superpowers/specs/*-design.md` — architectural spec for the feature
 2. `docs/superpowers/plans/*.md` — bite-sized implementation plan (task-level requirements)
-3. `docs/plans/pdp-v3.md` (once created, supersedes v2) — product-level plan
+3. `docs/plans/pdp-v3.md` — product-level plan (supersedes v2, which is historical)
 4. The commit message and the task description provided at dispatch
 
 ### Checklist

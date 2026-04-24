@@ -16,9 +16,10 @@
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
 15. **SUBAGENT TASK WORKFLOW (no-commit model)** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) dispatch **`tdc-code-reviewer`** for spec + code quality review; (d) if the task modified UI, ALSO dispatch **`tdc-design-system-enforcer`** for visual compliance; (e) report results; (f) **STOP and wait for user checkpoint** before dispatching next task. **NO COMMITS at task level** — code accumulates in the working tree until phase end (rule 16). Implementer subagents must NOT commit; controller handles commits at phase boundary. This aligns with the user's practice of committing only when documentation is simultaneously updated.
-16. **PHASE-END COMMIT PROTOCOL** → At the end of EACH phase, in order: (a) **triple review** — dispatch `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **dispatch `tdc-documentation-expert`** to analyze the phase's git diff and update ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
+16. **PHASE-END COMMIT PROTOCOL** → At the end of EACH phase, in order: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **triple review** — dispatch `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **dispatch `tdc-documentation-expert`** to analyze the phase's git diff and update ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during phase-end triple review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
+19. **USER INTENT CODIFICATION** → Reviewers check the implementation against what is **formally documented** in `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/plans/pdp-v3.md` — they do NOT infer requirements from conversation history. Therefore: BEFORE the phase-end triple review (rule 16 step a), the controller MUST scan the session conversation for user decisions / requests / scope changes that have NOT yet been codified in the plan. For each such item: (a) update the plan task list with an explicit task for the current or a future phase; or (b) explicitly defer with a rationale, logged as a TECH_DEBT entry with a resolution trigger; or (c) fold it into the current phase's commit scope if it's small and timely. Save the scan artifact as `docs/reviews/YYYY-MM-DD-user-intent-scan-phase-<N>.md` with the mapping table (user decision → codification artifact). This closes the gap whereby a user decision made in conversation but never written to the plan would go unverified at review time.
 
 ---
 
@@ -27,7 +28,7 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 **Project:** tdcweb - The Dreamer's Cave Virtual Music Club Website
 **Domain:** thedreamerscave.club
 **Motto:** "You Can See The Music"
-**Last Updated**: January 2025
+**Last Updated**: 2026-04-24 (Phase 2 — Nuxt 4 core configuration)
 
 ## 🚨 CRITICAL DEVELOPMENT PRINCIPLES
 
@@ -277,7 +278,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 
 **IRON RULE**: *When in doubt, use expert diretti. Transparency > automation.*
 
-## 🤖 INTELLIGENT AGENT SYSTEM (24 Agents)
+## 🤖 INTELLIGENT AGENT SYSTEM (27 Agents)
 
 ### 🎯 USAGE PATTERNS
 
@@ -422,7 +423,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - Deep spec: `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
 - Frontend playbook: `docs/frontend/nuxt-playbook.md`
-- Project plan v3: `docs/plans/pdp-v3.md` (created during migration)
+- Project plan v3: `docs/plans/pdp-v3.md` (current, Nuxt 4 era)
 - v2 (historical): `docs/plans/pdp-v2.md`
 
 ## 💬 Communication Style - CRITICAL
@@ -477,53 +478,66 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 
 ```
 /data1/tdcweb/
-├── backend/
+├── backend/                     # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── models/          # Database table definitions
+│   │   ├── config.py
+│   │   ├── models/              # MySQL table bindings
 │   │   ├── routes/
-│   │   │   ├── api/         # REST API endpoints
-│   │   │   └── admin/       # Admin-only endpoints
-│   │   ├── services/        # Business logic layer
-│   │   ├── utils/           # Helpers (db.py, validators.py, decorators.py)
-│   │   └── tasks/           # Celery async tasks
-│   ├── migrations/          # Database migrations
+│   │   │   ├── api/             # Public REST API (/api/v1/*)
+│   │   │   └── admin/           # Admin-only endpoints
+│   │   ├── services/            # Business logic layer
+│   │   ├── utils/               # db.py, responses.py, decorators.py, validators.py
+│   │   └── tasks/               # Celery async tasks
+│   ├── migrations/
 │   └── tests/
 │
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # Vue components by domain
-│   │   │   ├── common/
-│   │   │   ├── landing/
-│   │   │   ├── locations/
-│   │   │   ├── events/
-│   │   │   ├── artists/
-│   │   │   ├── blog/
-│   │   │   ├── auth/
-│   │   │   ├── user/
-│   │   │   └── admin/
-│   │   ├── composables/     # Vue composables (useLocationTheme, useScrollAnimation)
-│   │   ├── stores/          # Pinia state management
-│   │   ├── views/           # Route-specific pages
-│   │   │   └── admin/
-│   │   ├── router/          # Vue Router
-│   │   ├── i18n/            # Translations (EN, IT, FR, ES)
-│   │   ├── styles/          # Global CSS + Tailwind
-│   │   ├── assets/          # Images, videos, fonts
-│   │   └── utils/
-│   └── public/
+├── frontend/                    # Nuxt 4 + Vue 3 + TypeScript (strict)
+│   ├── app/                     # Nuxt 4 `app/` layer
+│   │   ├── app.vue
+│   │   ├── assets/css/          # main.css (Tailwind v4 + @theme + location vars)
+│   │   ├── components/          # <AppHeader />, by-domain subfolders (later phases)
+│   │   ├── composables/         # useLocationTheme, useScrollAnimation (later phases)
+│   │   ├── plugins/             # gsap.client.ts, lenis.client.ts (client-only)
+│   │   ├── stores/              # Pinia (user.ts, ui.ts, … later phases)
+│   │   └── types/               # Shared TS types (api, user, location, event)
+│   ├── server/                  # Nitro server routes — hybrid BFF
+│   │   ├── api/                 # auth/**, revalidate (later phases)
+│   │   ├── middleware/          # auth-forward.ts
+│   │   └── utils/               # cookies.ts, flask-client.ts
+│   ├── i18n/locales/            # @nuxtjs/i18n JSON — en.json, it.json, fr.json, es.json
+│   ├── public/                  # Static assets (served as-is)
+│   ├── tests/                   # vitest unit specs · Playwright E2E (later phases)
+│   ├── nuxt.config.ts
+│   ├── vitest.config.ts
+│   ├── .env.example
+│   └── package.json
 │
 ├── docs/
-│   └── plans/
-│       └── pdp-v2.md        # Project Development Plan
+│   ├── TECH_DEBT.md             # Technical debt register (rule 18)
+│   ├── api/                     # REST API reference
+│   ├── backend/                 # Flask architecture
+│   ├── database/                # Schema / migrations
+│   ├── deployment/              # Dev + prod runbooks
+│   ├── frontend/                # nuxt-playbook.md (frontend reference)
+│   ├── i18n/
+│   ├── integrations/
+│   ├── plans/                   # pdp-v2.md (historical), pdp-v3.md (current)
+│   ├── reviews/                 # Review artifacts (code, design, docs sync)
+│   └── superpowers/
+│       ├── specs/               # Phase-specific architectural specs
+│       └── plans/               # Phase-specific task-level plans
 │
-├── nginx/                   # Nginx configuration
+├── nginx/                       # Production nginx config
 │
 ├── .claude/
-│   ├── agents/              # 24 specialized agents (tdc-*)
-│   └── skills/              # 5 skills (tdc-docs, tdc-backend, etc.)
+│   ├── agents/                  # 27 specialized agents (tdc-*)
+│   └── skills/                  # CLI skills (tdc-docs, tdc-backend, tdc-frontend, tdc-database, tdc-testing)
 │
-└── CLAUDE.md                # This file
+├── CHANGELOG.md
+├── README.md
+├── dev.sh                       # Dev-server manager (Flask :9502 + Nuxt :9503)
+└── CLAUDE.md                    # This file
 ```
 
 ## 🗄️ Database Configuration
@@ -602,72 +616,125 @@ def query_db(sql, params=None, one=False):
 
 ## 🎨 Location Theming System
 
-Each location has a unique visual identity using CSS variables:
+Each location has a unique visual identity. All palettes live in
+**one file**: `frontend/app/assets/css/main.css`. Tailwind v4 `@theme`
+maps Tailwind color tokens (`primary`, `secondary`, `accent`, `dark`,
+`surface`) to `--tdc-color-*` CSS vars. `[data-location="<slug>"]` blocks
+under `@layer base` override those vars. The slug is stamped on `<body>`
+by `useLocationTheme(slug)` via `useHead({ bodyAttrs })` — SSR-safe,
+zero-JS at paint.
 
 ```css
-/* Example: The Dreamer's Cave */
-[data-location="dreamerscave"] {
-  --color-primary: #0891b2;
-  --color-secondary: #06b6d4;
-  --color-accent: #22c55e;
-  --color-dark: #0c1222;
-  --gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+/* frontend/app/assets/css/main.css */
+@theme {
+  --color-primary: var(--tdc-color-primary);
+  --color-secondary: var(--tdc-color-secondary);
+  /* … */
+}
+
+@layer base {
+  :root {                         /* default palette */
+    --tdc-color-primary: #0891b2;
+    /* … */
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+  [data-location="dreamerscave"] { /* overrides when body[data-location="dreamerscave"] */
+    --tdc-color-primary: #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent: #22c55e;
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+  /* … 7 more location blocks, grouped by mood */
 }
 ```
 
-**Mood Categories:**
-- **Cosmic/Tech**: DreamersCave, DreamVision, Evanescence
-- **Hybrid**: LiveMagic, The Lounge
-- **Warm/Intimate**: Arquipélago, Noah's Ark, Jazz Club
+**Slug convention:** all lowercase, no spaces, no diacritics
+(`thelounge`, `arquipelago`, `noahsark`, `jazzclub`). Display names are
+UI-layer only — never used as attribute values.
 
-## 🎬 Animation System (GSAP)
+**Mood categories (8 of 10+ palettes live — see TD-008):**
+- **Cosmic/Tech**: `dreamerscave`, `dreamvision`, `evanescence`
+- **Hybrid**: `livemagic`, `thelounge`
+- **Warm/Intimate**: `arquipelago`, `noahsark`, `jazzclub`
 
-**Core Libraries:**
-- **GSAP**: Main animation engine
-- **ScrollTrigger**: Scroll-based animations
-- **Lenis**: Smooth scrolling
+Full reference: `docs/frontend/nuxt-playbook.md` §14.
 
-**Composable Pattern:**
-```javascript
-// composables/useScrollAnimation.js
+## 🎬 Animation System (GSAP + ScrollTrigger + Lenis)
+
+**Core libraries:**
+- **GSAP** — main animation engine
+- **ScrollTrigger** — scroll-based animations
+- **Lenis** — smooth scrolling (package name: `lenis`, NOT `@studio-freight/lenis`)
+
+**SSR discipline** (per `§ SSR Client-Only Rules`):
+- GSAP and Lenis are registered in **client-only plugins**
+  (`frontend/app/plugins/gsap.client.ts`, `frontend/app/plugins/lenis.client.ts`)
+  — the `.client.ts` suffix excludes them from the SSR bundle.
+- Lenis's RAF is synced via `gsap.ticker.add(...)` — never a second
+  `requestAnimationFrame` loop (two RAFs drift out of sync and visibly jitter).
+- Lenis is stopped on `/admin/*` and `/dashboard/*` (data tables, scroll-into-view,
+  keyboard navigation need native browser scroll).
+
+**Plugin pattern (Phase 2):**
+```typescript
+// frontend/app/plugins/gsap.client.ts
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import Lenis from 'lenis'
 
-gsap.registerPlugin(ScrollTrigger)
+export default defineNuxtPlugin(() => {
+  gsap.registerPlugin(ScrollTrigger)
+  return { provide: { gsap, ScrollTrigger } }
+})
+```
 
+**Composable pattern (Phase 5+) — animation cleanup is MANDATORY:**
+```typescript
+// frontend/app/composables/useScrollAnimation.ts
 export function useScrollAnimation() {
-  const initSmoothScroll = () => {
-    const lenis = new Lenis({ duration: 1.2 })
-    // ...
-  }
+  const { $gsap } = useNuxtApp()
+  const ctx = $gsap.context(() => {
+    // Declare animations inside the context so ctx.revert()
+    // can kill them on unmount, preventing ScrollTrigger leaks
+    // across route navigations.
+  })
+  onBeforeUnmount(() => ctx.revert())
 
-  const animateReveal = (elements, options = {}) => {
-    gsap.from(elements, {
+  const animateReveal = (els: Element[]) => {
+    $gsap.from(els, {
       y: 100,
       opacity: 0,
       duration: 1,
       stagger: 0.2,
-      scrollTrigger: { trigger: elements[0], start: 'top 80%' }
+      scrollTrigger: { trigger: els[0], start: 'top 80%' },
     })
   }
 
-  return { initSmoothScroll, animateReveal }
+  return { animateReveal }
 }
 ```
 
+Detailed patterns: `docs/frontend/nuxt-playbook.md` §§ 8–9.
+
 ## 🌐 i18n System
 
-**Supported Languages:**
-- **EN** (default)
+**Module:** `@nuxtjs/i18n` (Nuxt module, NOT raw `vue-i18n`).
+**Strategy:** `prefix_except_default` — English at `/`, others at `/it/`, `/fr/`, `/es/`.
+
+**Supported languages:**
+- **EN** (default, no URL prefix)
 - **IT** (Italian)
 - **FR** (French)
 - **ES** (Spanish)
 
-**Translation Strategy:**
-- UI strings: JSON files in `/frontend/src/i18n/`
-- Content: Database `*_translations` tables (location_translations, event_translations, etc.)
-- Language detection: URL param > cookie > browser preference > default (EN)
+**Translation strategy:**
+- **UI strings** — JSON locale files under `frontend/i18n/locales/{en,it,fr,es}.json`, loaded lazily.
+- **Content** — database `*_translations` tables (`location_translations`,
+  `event_translations`, …) fetched via Flask.
+- **Language detection** — URL prefix > `i18n_redirected` cookie > browser
+  `Accept-Language` > default EN. Configured in `frontend/nuxt.config.ts`
+  via `detectBrowserLanguage`.
+- **SEO** — hreflang tags emitted automatically by `@nuxtjs/seo` +
+  `@nuxtjs/i18n` when `runtimeConfig.public.siteUrl` is set.
 
 ## 🔐 Security Rules
 

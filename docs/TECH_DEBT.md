@@ -67,37 +67,61 @@ buffer for deferred work.
 - **Close when:** `grep -rn '@studio-freight/lenis'
   .claude/skills/` returns nothing.
 
-### 🟡 TD-006 · Task 2.3 plan needs rework for Tailwind v4 (CSS-first config)
+### 🟡 TD-009 · `flask-client.ts` uses globalThis-only pattern — prod Nitro safety unverified
 
-- **Source:** Task 2.1 follow-up fix (2026-04-23), discovered at dev-boot smoke test.
-- **Issue:** The plan prescribes a `tailwind.config.ts` (Tailwind v3
-  pattern) wired via `@nuxtjs/tailwindcss`. But `@nuxt/ui` and
-  `nuxt-og-image` (transitively pulled by `@nuxtjs/seo`) drag in
-  `tailwindcss@4.x`. `@nuxtjs/tailwindcss@6` doesn't support v4 → dev
-  boot fails with "PostCSS plugin has moved to separate package."
-- **Fix applied inline:** Removed `@nuxtjs/tailwindcss` module, added
-  `@tailwindcss/vite` as explicit dependency, wired Vite plugin in
-  `nuxt.config.ts`, created stub `app/assets/css/main.css` with
-  `@import "tailwindcss";`. Dev boots clean, `/` returns 200.
-- **Why it's open:** the implementation plan's Task 2.3 still describes
-  v3 setup (`tailwind.config.ts`, @nuxtjs/tailwindcss, `tailwind.config`
-  export, JS theme tokens). When we reach Task 2.3, we need to
-  reformulate the steps:
-  - Replace `tailwind.config.ts` creation with Tailwind v4 `@theme`
-    block inside `main.css` (CSS-first tokens).
-  - Use `@import "tailwindcss";` (already in the stub).
-  - Location CSS vars (`[data-location="..."]`) move under `@layer base`
-    in the same file.
-  - No separate Tailwind JS config unless we explicitly need a `@config
-    "./tailwind.config.js";` directive (not required for our tokens).
-- **Impact:** medium. The current `main.css` is a single-line stub. Task
-  2.3 must produce the full theme/tokens file. If we follow the plan
-  verbatim we'll re-introduce the v3 conflict.
-- **Resolution trigger:** Task 2.3 execution — update plan pre-flight,
-  then execute the v4-shaped version.
-- **Close when:** Task 2.3 lands with a `main.css` that includes all TDC
-  theme tokens + all 10 location CSS var blocks, dev server boots,
-  build succeeds, and no `tailwind.config.ts` exists at project root.
+- **Source:** Task 2.7 review (2026-04-24) surfaced the risk.
+- **Issue:** `frontend/server/utils/flask-client.ts` (Task 2.6) reads
+  `$fetch` and `useRuntimeConfig` exclusively from `globalThis` via
+  `getFetch()` / `getRuntimeConfig()` helpers. Task 2.7 proved that
+  Nitro's prod bundle does NOT universally expose h3 auto-imports on
+  `globalThis` — `getCookie` lives as a regular module binding in
+  `.nuxt/dev/index.mjs:5736`. By analogy, `$fetch` and `useRuntimeConfig`
+  may also be module bindings in the prod bundle and therefore absent
+  from `globalThis` when `flaskFetch` is called from a server route.
+  If so, the first SSR request that calls `flaskFetch` would throw
+  `TypeError: $fetch is not a function`.
+- **Why it's open:** unit tests pass because they install globalThis
+  stubs, so the flaw cannot be caught at unit-test layer. Verifying
+  prod-safety requires either an integration smoke test (Phase 4 when
+  login BFF is wired) or a direct grep of `.output/server/index.mjs`
+  after a production build.
+- **Impact:** potentially high IF the risk materializes — every
+  server route that calls `flaskFetch` would 500. Unknown IF it's
+  theoretical (Nuxt/Nitro may still keep `$fetch` on globalThis even
+  though `getCookie` isn't).
+- **Resolution trigger:** either (A) Phase 4 real E2E hits a route
+  that proxies to Flask via `flaskFetch` and we observe the behavior,
+  or (B) we preemptively apply the Task 2.7 resilient pattern (stub
+  → explicit fallback to `ofetch` / `nitropack`).
+- **Close when:** `flaskFetch` has been invoked from a real server
+  route in prod build mode without error, OR it has been rewritten
+  to use the resilient pattern matching `auth-forward.ts` (stub
+  first, explicit fallback import).
+
+---
+
+### 🟢 TD-008 · 2 location palettes missing from `main.css`
+
+- **Source:** Task 2.3 (uncommitted in working tree, 2026-04-23)
+- **Issue:** The spec and project description mention "10+ themed
+  locations" but only 8 palettes are defined in
+  `frontend/app/assets/css/main.css`: DreamersCave, DreamVision,
+  Evanescence, LiveMagic, TheLounge, Arquipelago, NoahsArk, JazzClub.
+  The authoritative sources (spec §10, nuxt-playbook §14,
+  tdc-frontend-expert) enumerate the same 8.
+- **Why it's open:** the remaining 2+ locations haven't been catalogued
+  with slugs and palettes yet. Requires a product decision (which
+  venues, what mood group, what colors) before palettes can be defined.
+  Inline comment in `main.css` (lines 45-47) flags this.
+- **Impact:** low. Pages for non-catalogued locations will fall back to
+  the `:root` default palette. No visual breakage — just no unique
+  identity for those venues until palettes are added.
+- **Resolution trigger:** product-level input on the remaining
+  location slugs + colour direction. Typically falls out of a design
+  pass on the full location catalogue.
+- **Close when:** `main.css` has a `[data-location="<slug>"]` block
+  for every slug present in the `locations` table (query DB, compare
+  with blocks in the CSS), with contrast-verified palettes.
 
 ---
 
@@ -187,6 +211,70 @@ buffer for deferred work.
   shows `'2026-04-01'` (or later).
 - **Closed:** 2026-04-23 · commit f585874 (Task 2.1) — full
   `nuxt.config.ts` rewrite landed with `compatibilityDate: '2026-04-01'`.
+
+### 🟡 TD-006 · Task 2.3 plan needs rework for Tailwind v4 (CSS-first config)
+
+- **Source:** Task 2.1 follow-up fix (2026-04-23), discovered at dev-boot smoke test.
+- **Issue:** The plan prescribes a `tailwind.config.ts` (Tailwind v3
+  pattern) wired via `@nuxtjs/tailwindcss`. But `@nuxt/ui` and
+  `nuxt-og-image` (transitively pulled by `@nuxtjs/seo`) drag in
+  `tailwindcss@4.x`. `@nuxtjs/tailwindcss@6` doesn't support v4 → dev
+  boot fails with "PostCSS plugin has moved to separate package."
+- **Fix applied inline:** Removed `@nuxtjs/tailwindcss` module, added
+  `@tailwindcss/vite` as explicit dependency, wired Vite plugin in
+  `nuxt.config.ts`, created stub `app/assets/css/main.css` with
+  `@import "tailwindcss";`. Dev boots clean, `/` returns 200.
+- **Why it's open:** the implementation plan's Task 2.3 still describes
+  v3 setup (`tailwind.config.ts`, @nuxtjs/tailwindcss, `tailwind.config`
+  export, JS theme tokens). When we reach Task 2.3, we need to
+  reformulate the steps:
+  - Replace `tailwind.config.ts` creation with Tailwind v4 `@theme`
+    block inside `main.css` (CSS-first tokens).
+  - Use `@import "tailwindcss";` (already in the stub).
+  - Location CSS vars (`[data-location="..."]`) move under `@layer base`
+    in the same file.
+  - No separate Tailwind JS config unless we explicitly need a `@config
+    "./tailwind.config.js";` directive (not required for our tokens).
+- **Impact:** medium. The current `main.css` is a single-line stub. Task
+  2.3 must produce the full theme/tokens file. If we follow the plan
+  verbatim we'll re-introduce the v3 conflict.
+- **Resolution trigger:** Task 2.3 execution — update plan pre-flight,
+  then execute the v4-shaped version.
+- **Close when:** Task 2.3 lands with a `main.css` that includes all TDC
+  theme tokens + all 10 location CSS var blocks, dev server boots,
+  build succeeds, and no `tailwind.config.ts` exists at project root.
+- **Closed:** 2026-04-23 · commit <phase-2-commit> (Task 2.3) — main.css
+  rewritten with Tailwind v4 CSS-first config: @import "tailwindcss";
+  + @theme block with color/font tokens indirected through CSS vars;
+  + @layer base with :root defaults and 8 per-location blocks grouped by mood
+  (Cosmic/Tech, Hybrid, Warm/Intimate). No `tailwind.config.ts` created.
+  Dev server boots cleanly; CSS served includes `--tdc-color-primary`.
+
+### 🟢 TD-010 · Root-level `package.json` + `package-lock.json` — purpose undetermined
+
+- **Source:** discovered during Phase 2 end-of-phase working-tree audit (2026-04-24).
+- **Issue:** `/data1/tdcweb-dev/package.json` (55 bytes) and
+  `/data1/tdcweb-dev/package-lock.json` (~37 KB), plus a ~14 MB
+  `node_modules/`, existed at the repo root — all created 2026-01-11,
+  untracked, never committed. Single `"eslint": "^9.39.2"` devDep with
+  full transitive tree (69 top-level packages). NO eslint config file
+  anywhere at root (no `.eslintrc*`, no `eslint.config.*`). No script,
+  CI workflow, git hook, or source file referenced them.
+- **Why it was open:** a previous session had run `npm install
+  --save-dev eslint` at the repo root intending to set up monorepo-wide
+  linting, but never followed through with config, scripts, or
+  integration. Orphan install, idle for ~3.5 months.
+- **Impact:** low — functionally nothing; cosmetic `git status` noise
+  + 14 MB dead disk usage.
+- **Resolution trigger:** Phase 2 end-of-phase audit forced the decision.
+- **Close when:** the 3 items are removed OR deliberately committed
+  with a documented purpose.
+- **Closed:** 2026-04-24 · commit <phase-2-commit> (Phase 2 end-of-phase
+  audit) — `package.json`, `package-lock.json`, and `node_modules/` at
+  repo root were deleted. `frontend/` keeps its own lint setup;
+  `backend/` will use Python linters (ruff/flake8). A future repo-wide
+  lint policy, if decided, will be introduced deliberately with
+  scripts + CI + docs, not as an orphan install.
 
 ---
 

@@ -47,8 +47,10 @@ section is needed.
 Nuxt 4 introduces the `app/` directory to separate application code from
 project tooling. Compared to Nuxt 3 (flat root), this gives a cleaner
 separation. Your code lives under `app/`; build config and tooling
-(`nuxt.config.ts`, `tsconfig.json`, `tailwind.config.ts`, `package.json`)
-stay at project root.
+(`nuxt.config.ts`, `tsconfig.json`, `vitest.config.ts`, `package.json`)
+stay at project root. **No `tailwind.config.ts`** — TDC uses Tailwind v4
+CSS-first config, with tokens declared in `app/assets/css/main.css`
+via `@theme` (see §14).
 
 ### 1.2 Auto-imports
 
@@ -76,13 +78,20 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@vueuse/nuxt',
     '@nuxt/image',
-    '@nuxtjs/tailwindcss',
     '@nuxtjs/seo',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
+    // Tailwind v4 is wired via the Vite plugin, NOT a Nuxt module.
+    // See `vite.plugins` below. `@nuxtjs/tailwindcss` targets Tailwind v3
+    // and conflicts with v4 hoisted by @nuxt/ui / nuxt-og-image.
   ],
 
   devtools: { enabled: true },
+
+  // Tailwind CSS v4 (CSS-first config). Tokens live in main.css.
+  vite: {
+    plugins: [tailwindcss()],         // import tailwindcss from '@tailwindcss/vite'
+  },
 
   css: ['~/assets/css/main.css'],
 
@@ -927,17 +936,65 @@ File naming convention:
 
 ### 11.3 Auth-forward server middleware
 
+> **Implementation note (Phase 2 discovery).** Nitro's prod bundle does
+> NOT universally expose h3 auto-imports on `globalThis` —
+> `getCookie` / `defineEventHandler` live as module-level bindings in
+> `.nuxt/dev/index.mjs`. A bare-identifier usage at module scope works
+> in dev (Nitro patches globalThis at serve time) but throws
+> `ReferenceError` inside vitest (ESM hoists `import` above any test-file
+> globalThis stubs) and is fragile across Nuxt/Nitro upgrades. The
+> canonical TDC pattern is **resolve-at-call-time: prefer a globalThis
+> stub if present (tests), fall back to a direct `h3` import**.
+
+The actual TDC implementation:
+
 ```typescript
 // server/middleware/auth-forward.ts
-export default defineEventHandler(async (event) => {
-  const access = getCookie(event, 'tdc_access')
+import type { H3Event, EventHandler } from 'h3'
+import {
+  defineEventHandler as h3DefineEventHandler,
+  getCookie as h3GetCookie,
+} from 'h3'
+import { TDC_ACCESS_COOKIE } from '../utils/cookies'
+
+type DefineEventHandlerFn = <T extends EventHandler>(h: T) => T
+type GetCookieFn = (event: H3Event, name: string) => string | undefined
+
+const resolveDefineEventHandler = (): DefineEventHandlerFn => {
+  const stubbed = (globalThis as unknown as { defineEventHandler?: DefineEventHandlerFn })
+    .defineEventHandler
+  return stubbed ?? (h3DefineEventHandler as DefineEventHandlerFn)
+}
+const resolveGetCookie = (): GetCookieFn => {
+  const stubbed = (globalThis as unknown as { getCookie?: GetCookieFn }).getCookie
+  return stubbed ?? (h3GetCookie as GetCookieFn)
+}
+
+const handler: EventHandler = ((event: H3Event) => {
+  const access = resolveGetCookie()(event, TDC_ACCESS_COOKIE)
   if (access) {
     event.context.flaskHeaders = { Authorization: `Bearer ${access}` }
   }
-})
+}) as EventHandler
+
+// Lazy-wrap: defer `defineEventHandler` lookup until first invocation.
+let _wrapped: EventHandler | null = null
+const wrapped: EventHandler = ((event: H3Event) => {
+  if (!_wrapped) _wrapped = resolveDefineEventHandler()(handler)
+  return _wrapped(event)
+}) as EventHandler
+
+export default wrapped
 ```
 
-Runs on **every** request (page, API, static). Populates `event.context.flaskHeaders` so server route handlers can forward auth when calling Flask.
+Runs on **every** request (page, API, static). Populates
+`event.context.flaskHeaders` so downstream server-route handlers can
+forward auth when calling Flask via `flaskFetch`.
+
+**Contract (do NOT drift):** cookie name exactly `tdc_access`; header
+key exactly `Authorization` (capital A); header value exactly
+`Bearer <jwt>` (capital B, single space). Flask's `@jwt_required`
+extractor and our unit tests depend on this casing.
 
 ### 11.4 `flaskFetch` utility
 
@@ -945,14 +1002,23 @@ Runs on **every** request (page, API, static). Populates `event.context.flaskHea
 // server/utils/flask-client.ts
 import type { H3Event } from 'h3'
 
+type FetchFn = typeof $fetch
+type RuntimeConfigFn = () => { flaskUrl: string } & Record<string, unknown>
+
+const getFetch = (): FetchFn =>
+  (globalThis as unknown as { $fetch: FetchFn }).$fetch
+
+const getRuntimeConfig = (): ReturnType<RuntimeConfigFn> =>
+  (globalThis as unknown as { useRuntimeConfig: RuntimeConfigFn }).useRuntimeConfig()
+
 export const flaskFetch = <T = unknown>(
   url: string,
   event: H3Event,
   options: Parameters<typeof $fetch<T>>[1] = {},
 ): Promise<T> => {
-  const { flaskUrl } = useRuntimeConfig()
+  const { flaskUrl } = getRuntimeConfig()
   const flaskHeaders = (event.context.flaskHeaders ?? {}) as Record<string, string>
-  return $fetch<T>(url, {
+  return getFetch()<T>(url, {
     baseURL: flaskUrl,
     ...options,
     headers: { ...flaskHeaders, ...(options.headers ?? {}) },
@@ -960,42 +1026,73 @@ export const flaskFetch = <T = unknown>(
 }
 ```
 
+> **⚠️ Known risk — TD-009.** `flaskFetch` currently reads `$fetch` and
+> `useRuntimeConfig` **only** from `globalThis`, without the h3-import
+> fallback used in `auth-forward.ts`. Unit tests pass because they
+> install globalThis stubs. Whether Nitro's prod bundle actually keeps
+> `$fetch` / `useRuntimeConfig` on globalThis across all code paths is
+> **unverified** — Phase 2 Task 2.7 proved `getCookie` is NOT on
+> globalThis in prod, so by analogy these may also be module bindings.
+> When Phase 4 wires the first real BFF route that calls `flaskFetch`,
+> verify in prod and retrofit the resilient pattern if needed. See
+> `docs/TECH_DEBT.md` TD-009.
+
 ### 11.5 Cookie helpers
 
 ```typescript
 // server/utils/cookies.ts
-import type { H3Event, CookieSerializeOptions } from 'h3'
+import type { H3Event } from 'h3'
+import {
+  setCookie as h3SetCookie,
+  deleteCookie as h3DeleteCookie,
+  getCookie as h3GetCookie,
+} from 'h3'
 
-const isProd = () => process.env.NODE_ENV === 'production'
+export const TDC_ACCESS_COOKIE = 'tdc_access'
+export const TDC_REFRESH_COOKIE = 'tdc_refresh'
+export const TDC_ACCESS_TTL_SECONDS = 900       // 15 min
+export const TDC_REFRESH_TTL_SECONDS = 604800   // 7 days
+export const TDC_REFRESH_COOKIE_PATH = '/api/auth'
 
-export const setAccessCookie = (event: H3Event, token: string) => {
-  setCookie(event, 'tdc_access', token, {
+// (globalThis-first / h3-fallback resolvers elided — same pattern as §11.3)
+
+export const setAccessCookie = (event: H3Event, token: string): void => {
+  resolveSetCookie()(event, TDC_ACCESS_COOKIE, token, {
     httpOnly: true,
-    secure: isProd(),
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
-    maxAge: 900,                    // 15 min
-  } satisfies CookieSerializeOptions)
+    maxAge: TDC_ACCESS_TTL_SECONDS,
+  })
 }
 
-export const setRefreshCookie = (event: H3Event, token: string) => {
-  setCookie(event, 'tdc_refresh', token, {
+export const setRefreshCookie = (event: H3Event, token: string): void => {
+  resolveSetCookie()(event, TDC_REFRESH_COOKIE, token, {
     httpOnly: true,
-    secure: isProd(),
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    path: '/api/auth',              // narrow scope
-    maxAge: 604800,                 // 7 days
-  } satisfies CookieSerializeOptions)
+    path: TDC_REFRESH_COOKIE_PATH,
+    maxAge: TDC_REFRESH_TTL_SECONDS,
+  })
 }
 
-export const clearAuthCookies = (event: H3Event) => {
-  deleteCookie(event, 'tdc_access', { path: '/' })
-  deleteCookie(event, 'tdc_refresh', { path: '/api/auth' })
+export const clearAuthCookies = (event: H3Event): void => {
+  const del = resolveDeleteCookie()
+  del(event, TDC_ACCESS_COOKIE, { path: '/' })
+  del(event, TDC_REFRESH_COOKIE, { path: TDC_REFRESH_COOKIE_PATH })
+  // ↑ the explicit `path` per cookie is REQUIRED — browsers match the
+  //   deletion path to the Set-Cookie path exactly, and a missing path
+  //   silently leaves the cookie alive. Do NOT "simplify" this.
 }
 
 export const getRefreshToken = (event: H3Event): string | undefined =>
-  getCookie(event, 'tdc_refresh')
+  resolveGetCookie()(event, TDC_REFRESH_COOKIE)
 ```
+
+Constants live at module scope so server routes, auth composables, and
+tests all agree on names, lifetimes, and path scope. Spec §8.2 is the
+source of truth; any change here MUST be mirrored in the spec and in
+Flask's token-issuance.
 
 ### 11.6 Logout handler
 
@@ -1175,113 +1272,138 @@ await setLocale('it')
 
 ## 14. Tailwind + location theming
 
-### 14.1 Tailwind config (TDC)
+### 14.1 Tailwind v4 — CSS-first config (no config file)
+
+TDC uses **Tailwind v4** wired via `@tailwindcss/vite`. There is **no**
+`tailwind.config.ts` at project root — tokens are declared in CSS inside
+`app/assets/css/main.css` via the `@theme` directive, and Tailwind v4
+auto-generates utilities (`bg-primary`, `text-accent`, `font-display`, …)
+from any `--color-*`, `--font-*`, `--background-image-*` tokens it finds
+there.
+
+The Vite plugin is wired in `nuxt.config.ts`:
 
 ```typescript
-// tailwind.config.ts
-import type { Config } from 'tailwindcss'
+// nuxt.config.ts
+import tailwindcss from '@tailwindcss/vite'
 
-export default <Config>{
-  content: ['./app/**/*.{vue,ts,tsx,js,jsx}', './nuxt.config.ts'],
-  theme: {
-    extend: {
-      colors: {
-        primary: 'var(--color-primary)',
-        secondary: 'var(--color-secondary)',
-        accent: 'var(--color-accent)',
-        dark: 'var(--color-dark)',
-        surface: 'var(--color-surface)',
-      },
-      backgroundImage: {
-        'hero-gradient': 'var(--gradient-hero)',
-      },
-      fontFamily: {
-        display: ['Inter', 'system-ui', 'sans-serif'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
-      },
-    },
-  },
-}
+export default defineNuxtConfig({
+  vite: { plugins: [tailwindcss()] },
+  css: ['~/assets/css/main.css'],
+  // DO NOT add '@nuxtjs/tailwindcss' to modules — v3 module, conflicts with v4.
+})
 ```
 
-### 14.2 Base CSS + per-location vars
+### 14.2 `main.css` — tokens + per-location overrides
+
+The single source of truth for TDC visual identity:
 
 ```css
-/* app/assets/css/main.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* frontend/app/assets/css/main.css */
+@import "tailwindcss";
+
+/* Tokens — @theme so Tailwind generates utilities, indirected through
+   --tdc-* CSS vars so [data-location=".."] can override them without
+   regenerating utility classes. */
+@theme {
+  --color-primary:   var(--tdc-color-primary);
+  --color-secondary: var(--tdc-color-secondary);
+  --color-accent:    var(--tdc-color-accent);
+  --color-dark:      var(--tdc-color-dark);
+  --color-surface:   var(--tdc-color-surface);
+
+  --font-display: "Inter", "system-ui", sans-serif;
+  --font-body:    "Inter", "system-ui", sans-serif;
+
+  --background-image-hero-gradient: var(--tdc-gradient-hero);
+}
 
 @layer base {
-  :root {
-    --color-primary: #0891b2;
-    --color-secondary: #06b6d4;
-    --color-accent: #22c55e;
-    --color-dark: #0c1222;
-    --color-surface: #141420;
-    --gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  :root {                        /* default palette (Cosmic/Tech base) */
+    --tdc-color-primary:   #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent:    #22c55e;
+    --tdc-color-dark:      #0c1222;
+    --tdc-color-surface:   #141420;
+    --tdc-gradient-hero:   linear-gradient(135deg, #0891b2, #22c55e, #eab308);
   }
 
-  /* COSMIC/TECH */
+  /* ---- COSMIC / TECH ---------------------------------------------- */
   [data-location="dreamerscave"] {
-    --color-primary: #0891b2;
-    --color-secondary: #06b6d4;
-    --color-accent: #22c55e;
-    --gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+    --tdc-color-primary:   #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent:    #22c55e;
+    --tdc-gradient-hero:   linear-gradient(135deg, #0891b2, #22c55e, #eab308);
   }
   [data-location="dreamvision"] {
-    --color-primary: #06b6d4;
-    --color-secondary: #22c55e;
-    --color-accent: #facc15;
-    --gradient-hero: linear-gradient(135deg, #06b6d4, #22c55e, #facc15);
+    --tdc-color-primary:   #06b6d4;
+    --tdc-color-secondary: #22c55e;
+    --tdc-color-accent:    #facc15;
+    --tdc-gradient-hero:   linear-gradient(135deg, #06b6d4, #22c55e, #facc15);
   }
   [data-location="evanescence"] {
-    --color-primary: #8b5cf6;
-    --color-secondary: #a78bfa;
-    --color-accent: #ec4899;
-    --gradient-hero: linear-gradient(135deg, #8b5cf6, #ec4899, #facc15);
+    --tdc-color-primary:   #8b5cf6;
+    --tdc-color-secondary: #a78bfa;
+    --tdc-color-accent:    #ec4899;
+    --tdc-gradient-hero:   linear-gradient(135deg, #8b5cf6, #ec4899, #facc15);
   }
 
-  /* HYBRID */
+  /* ---- HYBRID ----------------------------------------------------- */
   [data-location="livemagic"] {
-    --color-primary: #ef4444;
-    --color-secondary: #f97316;
-    --color-accent: #06b6d4;
-    --gradient-hero: linear-gradient(135deg, #ef4444, #f97316, #06b6d4);
+    --tdc-color-primary:   #ef4444;
+    --tdc-color-secondary: #f97316;
+    --tdc-color-accent:    #06b6d4;
+    --tdc-gradient-hero:   linear-gradient(135deg, #ef4444, #f97316, #06b6d4);
   }
   [data-location="thelounge"] {
-    --color-primary: #db2777;
-    --color-secondary: #7c3aed;
-    --color-accent: #22d3ee;
-    --gradient-hero: linear-gradient(135deg, #db2777, #7c3aed, #22d3ee);
+    --tdc-color-primary:   #db2777;
+    --tdc-color-secondary: #7c3aed;
+    --tdc-color-accent:    #22d3ee;
+    --tdc-gradient-hero:   linear-gradient(135deg, #db2777, #7c3aed, #22d3ee);
   }
 
-  /* WARM/INTIMATE */
+  /* ---- WARM / INTIMATE -------------------------------------------- */
   [data-location="arquipelago"] {
-    --color-primary: #14b8a6;
-    --color-secondary: #22d3ee;
-    --color-accent: #f97316;
-    --gradient-hero: linear-gradient(135deg, #14b8a6, #22d3ee, #f97316);
+    --tdc-color-primary:   #14b8a6;
+    --tdc-color-secondary: #22d3ee;
+    --tdc-color-accent:    #f97316;
+    --tdc-gradient-hero:   linear-gradient(135deg, #14b8a6, #22d3ee, #f97316);
   }
   [data-location="noahsark"] {
-    --color-primary: #d97706;
-    --color-secondary: #92400e;
-    --color-accent: #14b8a6;
-    --gradient-hero: linear-gradient(135deg, #d97706, #fbbf24, #14b8a6);
+    --tdc-color-primary:   #d97706;
+    --tdc-color-secondary: #92400e;
+    --tdc-color-accent:    #14b8a6;
+    --tdc-gradient-hero:   linear-gradient(135deg, #d97706, #fbbf24, #14b8a6);
   }
   [data-location="jazzclub"] {
-    --color-primary: #92400e;
-    --color-secondary: #78350f;
-    --color-accent: #14b8a6;
-    --gradient-hero: linear-gradient(135deg, #92400e, #991b1b, #14b8a6);
+    --tdc-color-primary:   #92400e;
+    --tdc-color-secondary: #78350f;
+    --tdc-color-accent:    #14b8a6;
+    --tdc-gradient-hero:   linear-gradient(135deg, #92400e, #991b1b, #14b8a6);
   }
 
-  html { @apply bg-dark text-white; }
-  body { @apply font-body antialiased; }
+  /* Base document styles */
+  html {
+    background-color: var(--tdc-color-dark);
+    color: #ffffff;
+  }
+  body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 ```
 
-(Exact palettes per location are tuned with the design/UX pass. Placeholders above; update when final palettes are confirmed.)
+**Slug convention.** All lowercase, no diacritics, no spaces:
+`thelounge`, `arquipelago`, `noahsark`, `jazzclub`. UI display names
+(`"The Lounge"`, `"Arquipélago"`, `"Noah's Ark"`, `"Jazz Club"`) are
+presented at the component layer and never appear as attribute values.
+
+**Gap.** Two of the catalogued "10+ themed venues" have no palette yet
+— tracked as `TD-008` in `docs/TECH_DEBT.md`. Pages for non-catalogued
+slugs fall back to the `:root` Cosmic/Tech palette; no visual breakage,
+just no unique identity until palettes are added.
 
 ### 14.3 SSR-safe theme switch
 

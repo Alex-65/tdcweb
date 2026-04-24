@@ -1,135 +1,72 @@
 # Development Environment Setup
 
-Guide for setting up the TDC development environment.
+Local setup for the TDC Nuxt 4 + Flask stack.
 
 ## Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- MySQL 8.x
-- Redis (for Celery tasks)
-- Git
+- **Python 3.11+** — Flask backend
+- **Node.js 20+** — Nuxt 4 minimum runtime
+- **MySQL 8.x** — primary database
+- **Redis** — Celery broker + ISR cache (later phases)
+- **Git**
 
-## Quick Start
-
-The fastest way to get started is using the `dev.sh` script:
+## Quick start
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd tdcweb
 
-# Start all development servers
-./dev.sh start
+# Backend
+cd backend && python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                     # edit DB creds / secrets
 
-# Check status
+# Frontend
+cd ../frontend && npm install
+cp .env.example .env                     # edit NUXT_* vars
+
+# Run both
+cd .. && ./dev.sh start
 ./dev.sh status
 ```
 
-## Development Server Manager (dev.sh)
+## Ports
 
-A unified script to manage frontend and backend development servers.
+| Environment | Flask  | Nuxt   |
+|-------------|--------|--------|
+| Development | `9502` | `9503` |
+| Production  | `9500` | `9501` |
 
-### Commands
+In dev, the Nuxt dev server proxies `/api/**` to Flask via Nitro's
+`devProxy` (configured in `frontend/nuxt.config.ts`). The browser only
+ever talks to Nuxt on `:9503` — direct hits to `:9502` work but are
+not the expected request path.
 
-| Command | Description |
-|---------|-------------|
-| `./dev.sh start` | Start all services (detached) |
-| `./dev.sh stop` | Stop all services |
-| `./dev.sh restart` | Restart all services |
-| `./dev.sh status` | Show service status |
-| `./dev.sh logs <service>` | Follow service logs |
-
-### Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| `backend` | 9500 | Flask REST API |
-| `frontend` | 9501 | Vue.js dev server |
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-a`, `--attached` | Run in foreground (single service only) |
-
-### Examples
+## `dev.sh` — unified dev-server manager
 
 ```bash
-# Start everything in background
-./dev.sh start
-
-# Start only backend in foreground (for debugging)
-./dev.sh start backend -a
-
-# Restart frontend only
-./dev.sh restart frontend
-
-# Follow backend logs
-./dev.sh logs backend
-
-# Stop everything
-./dev.sh stop
+./dev.sh start                # Start backend + frontend (detached)
+./dev.sh start backend        # Start backend only
+./dev.sh start backend -a     # Start backend in foreground (debug)
+./dev.sh restart frontend     # Restart frontend only
+./dev.sh stop                 # Stop everything
+./dev.sh status               # Show per-service status
+./dev.sh logs backend         # Follow backend log
+./dev.sh logs frontend        # Follow frontend log
 ```
 
-### Log Files
+**Log files:** `.logs/backend.log`, `.logs/frontend.log`
+**PID files:** `.pids/`
 
-- Backend: `.logs/backend.log`
-- Frontend: `.logs/frontend.log`
+## Environment configuration
 
-### PID Files
-
-Process IDs are stored in `.pids/` directory for service management.
-
-## Manual Setup
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or: venv\Scripts\activate  # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your database credentials
-
-# Run development server
-flask run --host=0.0.0.0 --port=9500
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env.local
-# Edit .env.local with API URL
-
-# Run development server
-npm run dev -- --host 0.0.0.0 --port 9501
-```
-
-## Environment Configuration
-
-### Backend (.env)
+### Backend — `backend/.env`
 
 ```env
-# Flask
 FLASK_APP=wsgi.py
 FLASK_ENV=development
-SECRET_KEY=your-secret-key
-JWT_SECRET_KEY=your-jwt-secret
+SECRET_KEY=your-secret-key            # flask session signing
+JWT_SECRET_KEY=your-jwt-secret        # JWT HS256 signing (must match Nuxt-side if shared)
 
 # Database
 DB_HOST=localhost
@@ -138,20 +75,35 @@ DB_NAME=tdcweb
 DB_USER=tdcweb
 DB_PASSWORD=tdcweb
 
-# Redis
+# Redis / Celery
 REDIS_URL=redis://localhost:6379/0
 ```
 
-### Frontend (.env.local)
+### Frontend — `frontend/.env`
+
+Copy from `frontend/.env.example`. All Nuxt runtime vars use the `NUXT_`
+prefix — the old `VITE_*` names from the Vue+Vite era are obsolete.
 
 ```env
-VITE_API_URL=http://localhost:9500/api/v1
-VITE_APP_TITLE=The Dreamer's Cave
+# Flask URL used by Nuxt SSR (server-to-server, bypasses nginx).
+NUXT_FLASK_URL=http://localhost:9502
+
+# Cookie signing secret for the H3 cookie module.
+# Generate a 64-char hex secret with:  openssl rand -hex 64
+NUXT_COOKIE_SECRET=change-me-in-production
+
+# Public site URL for canonical links, Open Graph, sitemap.
+NUXT_PUBLIC_SITE_URL=http://localhost:9503
+
+# API base path as seen by the browser (resolved by nginx in prod,
+# by Nitro devProxy in dev).
+NUXT_PUBLIC_API_BASE=/api
 ```
 
-## Database Setup
+**Do not commit real secrets.** `frontend/.env.example` is committed;
+`frontend/.env` is local and gitignored.
 
-1. Create the database:
+## Database setup
 
 ```sql
 CREATE DATABASE tdcweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -160,97 +112,135 @@ GRANT ALL PRIVILEGES ON tdcweb.* TO 'tdcweb'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-2. Run migrations (when available):
+Migrations (as they come online):
 
 ```bash
-cd backend
+cd backend && source venv/bin/activate
 flask db upgrade
 ```
 
-## Verifying the Setup
+## Verifying the setup
 
-### Backend Health Check
-
-```bash
-curl http://localhost:9500/api/v1/health
-```
-
-Expected response:
-```json
-{
-  "success": true,
-  "data": {
-    "status": "ok",
-    "version": "0.1.0",
-    "timestamp": "2025-01-08T12:00:00.000Z"
-  }
-}
-```
-
-### Database Health Check
+### Flask health
 
 ```bash
-curl http://localhost:9500/api/v1/health/db
+curl http://localhost:9502/api/v1/health
 ```
 
-Expected response:
 ```json
-{
-  "success": true,
-  "data": {
-    "status": "ok",
-    "database": "connected",
-    "timestamp": "2025-01-08T12:00:00.000Z"
-  }
-}
+{ "success": true, "data": { "status": "ok", "version": "0.1.0", "timestamp": "…" } }
+```
+
+### Flask DB connectivity
+
+```bash
+curl http://localhost:9502/api/v1/health/db
+```
+
+### Nuxt landing page (SSR)
+
+```bash
+curl -I http://localhost:9503/
+# → HTTP/1.1 200 OK
+```
+
+### Nuxt → Flask proxy (dev)
+
+```bash
+curl http://localhost:9503/api/v1/health   # served by Flask via Nitro devProxy
+```
+
+## Frontend tooling
+
+```bash
+cd frontend
+
+npm run dev                    # Nuxt dev on :9503 (HMR, devtools, devProxy to Flask)
+npm run build                  # Production build to .output/
+npm run preview                # Serve the built prod output locally
+npm run generate               # Static site generate (SSG only)
+npm test                       # vitest, one-shot
+npm run test:watch             # vitest, watch mode
 ```
 
 ## Troubleshooting
 
-### Port Already in Use
-
-If you see "Address already in use" errors, check what's using the port:
+### Port already in use
 
 ```bash
-lsof -i :9500  # Check backend port
-lsof -i :9501  # Check frontend port
+lsof -i :9502                   # backend dev
+lsof -i :9503                   # frontend dev
 ```
 
-### Database Connection Failed
+`./dev.sh stop` before retrying `./dev.sh start`.
+
+### Database connection failed
 
 1. Verify MySQL is running: `systemctl status mysql`
-2. Check credentials in `.env`
-3. Test connection: `mysql -u tdcweb -p tdcweb`
+2. Check credentials in `backend/.env`
+3. Test the credentials directly:
+   ```bash
+   mysql -u tdcweb -p tdcweb
+   ```
 
-### Frontend Not Loading
+### Nuxt build fails on Tailwind
 
-1. Check if backend is running: `./dev.sh status`
-2. Verify API URL in frontend `.env.local`
-3. Check browser console for CORS errors
+TDC uses **Tailwind v4** wired via `@tailwindcss/vite` in `nuxt.config.ts`.
+There is **no** `tailwind.config.ts` at project root — tokens live in
+`frontend/app/assets/css/main.css` via `@theme`. If you see
+`PostCSS plugin has moved to separate package`, it means someone
+re-introduced `@nuxtjs/tailwindcss` (a v3 module that is incompatible
+with v4 hoisted by `@nuxt/ui` / `nuxt-og-image`). Remove it.
+See `docs/TECH_DEBT.md` TD-006 for historical context.
 
-## IDE Configuration
+### Vitest cannot resolve `$fetch` / `defineEventHandler` / `getCookie`
 
-### VS Code Extensions
+Expected. TDC's server utilities import the h3 functions explicitly AND
+check `globalThis` for test stubs. Tests install the stub **before
+importing the module** (see `frontend/tests/unit/*.test.ts` for the
+pattern). Nitro's prod bundle does not universally expose h3 auto-
+imports on `globalThis` — this is by design, not a bug.
 
-Recommended extensions for this project:
+### Frontend not loading
 
-- Python (ms-python.python)
-- Vetur or Volar (Vue.js support)
-- Tailwind CSS IntelliSense
-- ESLint
-- Prettier
+1. Check service status: `./dev.sh status`
+2. Verify Flask is reachable from Nuxt's perspective:
+   ```bash
+   curl $NUXT_FLASK_URL/api/v1/health
+   ```
+3. Check browser console for CORS or mixed-content errors.
 
-### VS Code Settings
+## IDE setup
+
+### Recommended VS Code extensions
+
+- **Volar** (`Vue.volar`) — Vue 3 / Nuxt 4 TypeScript support
+- **Tailwind CSS IntelliSense** (`bradlc.vscode-tailwindcss`) — v4 auto-completion
+- **ESLint**
+- **Python** (`ms-python.python`)
+
+### VS Code workspace settings
 
 ```json
 {
   "python.defaultInterpreterPath": "./backend/venv/bin/python",
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
   "editor.formatOnSave": true,
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  },
-  "[vue]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  "[python]": { "editor.defaultFormatter": "ms-python.black-formatter" },
+  "[vue]":    { "editor.defaultFormatter": "Vue.volar" },
+  "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
 }
 ```
+
+Volar handles `<script setup lang="ts">` with strict TypeScript (per
+`nuxt.config.ts` `typescript.strict: true`). Type-check is off during
+dev HMR for speed; run `npx nuxi typecheck` in CI or manually when you
+want the full check.
+
+## Related docs
+
+- `README.md` — project overview and quick start
+- `CLAUDE.md` — AI assistant project law (rules, stack, agent inventory)
+- `docs/frontend/nuxt-playbook.md` — full Nuxt 4 frontend reference
+- `docs/backend/architecture.md` — Flask architecture
+- `docs/TECH_DEBT.md` — open tech-debt items

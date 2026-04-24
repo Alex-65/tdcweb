@@ -44,7 +44,7 @@ Your job, every time you are invoked: analyze what has changed since the documen
 │   ├── DESIGN.md                              ← (Future, TD-007) consolidated visual identity
 │   ├── plans/
 │   │   ├── pdp-v2.md                          ← Historical (Vue + Vite era). DO NOT EDIT.
-│   │   └── pdp-v3.md                          ← Current product plan (Nuxt 4 era). Created in Phase 5.
+│   │   └── pdp-v3.md                          ← Current product plan (Nuxt 4 era). Created in Phase 2.
 │   ├── frontend/
 │   │   └── nuxt-playbook.md                   ← Deep reference for tdc-frontend-expert
 │   ├── superpowers/
