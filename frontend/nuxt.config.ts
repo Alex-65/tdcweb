@@ -51,12 +51,14 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    devProxy: {
-      '/api': {
-        target: process.env.NUXT_FLASK_URL || 'http://localhost:9502',
-        changeOrigin: true,
-      },
-    },
+    // No `devProxy` block: Nitro's `devProxy` is registered as h3 middleware
+    // BEFORE the worker that hosts server/api/* routes, so a catch-all
+    // `/api` would silently swallow `/api/auth/**` and `/api/revalidate`
+    // (the BFF) before Nitro could route them. Phase 4 end-of-phase
+    // integration smoke caught this: POST /api/auth/login skipped the
+    // BFF entirely. We use `routeRules.proxy` instead (see below) -- it
+    // is integrated with the route registry, so static server routes like
+    // `/api/auth/login` win over the `/api/...glob...` proxy rule.
     prerender: {
       crawlLinks: true,
       routes: ['/sitemap.xml'],
@@ -86,6 +88,20 @@ export default defineNuxtConfig({
     '/dashboard/**':     { ssr: false },
     '/admin':            { ssr: false },
     '/admin/**':         { ssr: false },
+
+    // Backend proxy: forward Flask read endpoints to the Flask backend.
+    // Nitro server routes (server/api/auth/**, server/api/revalidate.post.ts)
+    // win over these glob rules because the route registry resolves static
+    // routes before route-rule globs. In production Apache (Phase 6) does
+    // the same split at the reverse-proxy layer; this block is the dev-mode
+    // analog. Future Flask read endpoints (artists, blog) get their own
+    // entry below.
+    '/api/locations':    { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/locations' },
+    '/api/locations/**': { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/locations/**' },
+    '/api/events':       { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/events' },
+    '/api/events/**':    { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/events/**' },
+    '/api/health':       { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/health' },
+    '/api/health/**':    { proxy: (process.env.NUXT_FLASK_URL || 'http://localhost:9502') + '/api/health/**' },
 
     '/**':               { ssr: true },
   },

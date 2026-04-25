@@ -5,6 +5,240 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 4 (Nuxt BFF auth) + 4B (Backend buildout)] -- 2026-04-25
+
+Phase 4 wires end-to-end authentication: the Nuxt BFF (login / logout /
+refresh / me handlers + admin-gated revalidate endpoint), the client
+auth composable, and three route guards (auth / admin / staff). Phase
+4B was injected mid-phase when recon discovered the Flask backend was
+still at MVP-stub stage (only `/api/health` existed) and the BFF
+handlers had nothing real to talk to. 4B built the User model, JWT
+emission, bcrypt, auth decorators, three blueprints (auth /
+locations / events), and a complete pytest suite against a real MySQL
+test database (CLAUDE.md no-DB-mock rule). Phase 4 frontend then
+resumed and closed the chain with real integration smoke.
+
+End state: vitest 73/73, pytest 46/46, full E2E auth chain (login ->
+me -> revalidate -> logout) verified via curl with Flask + MySQL +
+Apache dev vhost. Working tree committed atomically per CLAUDE.md
+rule 16(e).
+
+### Added
+
+#### Backend (Phase 4B)
+
+- `backend/app/models/user.py` -- User model with bcrypt password
+  verification, role accessor, `to_dict()` envelope-friendly dump.
+  No SQLAlchemy: parameterized queries through `mysql-connector-python`
+  via `app/utils/db.py`.
+- `backend/app/utils/jwt_helpers.py` -- JWT emission and validation
+  helpers. Access TTL 15 min, refresh TTL 7 d, HS256, `JWT_SECRET_KEY`
+  loaded from env. `JWT_SECRET_KEY` made REQUIRED at app boot (HIGH
+  blocker fix during phase-end review): missing var raises immediately
+  rather than silently emitting tokens signed with a placeholder.
+- `backend/app/utils/auth_decorators.py` -- `@jwt_required` decorator
+  reads `Authorization: Bearer <jwt>` (capital B, single space, exact
+  casing per playbook §11.3 contract), validates, attaches user row to
+  `flask.g.current_user`. `@role_required('admin')` / `@role_required('staff')`
+  layered on top.
+- `backend/app/routes/api/auth.py` -- four endpoints:
+  - `POST /api/auth/login` -- email + password validation, returns
+    `{ success: true, data: { access, refresh, user } }`.
+  - `POST /api/auth/logout` -- token-side no-op (cookies cleared by BFF),
+    returns `{ success: true, data: { message: ... } }`.
+  - `POST /api/auth/refresh` -- consumes Bearer refresh, rotates pair,
+    returns `{ success: true, data: { access, refresh } }`.
+  - `GET /api/auth/me` -- returns `{ success: true, data: User.to_dict() }`.
+- `backend/app/routes/api/locations.py` -- read endpoints
+  (`GET /api/locations`, `GET /api/locations/<slug>`).
+- `backend/app/routes/api/events.py` -- read endpoints
+  (`GET /api/events`, `GET /api/events/<id>`) with `upcoming` query
+  filter. NULL `location_id` coerced to `0` -- TS types currently
+  declare `number`; flagged TD-017.
+- `backend/tests/test_foundation.py` (5 cases), `test_auth.py` (18),
+  `test_locations.py` (10), `test_events.py` (12). 45 cases against
+  real MySQL test schema (`tdcweb_test`) with conftest-managed session
+  lifecycle and full state cleanup. CLAUDE.md no-DB-mock rule observed.
+- `backend/app/routes/api/__init__.py` -- blueprint URL prefix dropped
+  from `/api/v1` to `/api` (pre-flight controller alignment, scan row
+  14). The `v1` prefix was scaffolding leftover that contradicted
+  spec/plan/CLAUDE.md/pdp-v3 and the BFF expectation.
+
+#### Frontend BFF (Phase 4 Tasks 4.1-4.3)
+
+- `frontend/server/api/auth/login.post.ts` -- TDD-authored. zod
+  validation of body, calls Flask, unwraps envelope, sets both cookies,
+  returns `{ user }`.
+- `frontend/server/api/auth/logout.post.ts` -- forwards to Flask
+  (try/catch fallback), clears both cookies regardless.
+- `frontend/server/api/auth/refresh.post.ts` -- pulls refresh token from
+  cookie, calls Flask with `Authorization: Bearer <refresh>`, rotates
+  pair.
+- `frontend/server/api/auth/me.get.ts` -- gates on
+  `event.context.flaskHeaders` defined, calls Flask, unwraps envelope.
+- `frontend/server/api/revalidate.post.ts` -- admin-gated on-demand SSR
+  cache invalidation. Path validation (no `..`, no `//`, max 500 chars,
+  must start with `/`). Cache-key format derived from Nitro source
+  (`cache:nitro:routes:_:<escapedPathname>.<hash>.json`) -- earlier
+  spec/plan drafts had the prefix wrong; reconciled at this phase's
+  docs-sync.
+
+#### Frontend client (Phase 4 Task 4.4)
+
+- `frontend/app/composables/useAuth.ts` -- thin wrapper over
+  `useAuthStore`, exposes `user / isAuthenticated / isAdmin / isStaff`
+  plus `fetchMe / login / logout`. Decision logic extracted into pure
+  `buildAuthOps(store, fetcher)` for testability. Uses
+  `useRequestFetch()` for SSR cookie-forwarding (raw `$fetch` does NOT
+  forward incoming-request cookies to internal Nitro routes during SSR;
+  authenticated users would loop back to login on every middleware
+  pass).
+- `frontend/app/utils/auth-guard.ts` -- pure helpers
+  (`buildLoginRedirect`, `decideAuthOutcome`, `decideAdminOutcome`,
+  `decideStaffOutcome`) consumed by the three route middlewares.
+  `auth-guard.test.ts` exercises every branch.
+- `frontend/app/middleware/auth.ts` / `admin.ts` / `staff.ts` -- thin
+  wire-ups of auto-imports to the pure helpers. Bounce guests to
+  `/auth/login?redirect=<encoded>`. Open-redirect validation in the
+  login page itself is tracked as TD-015.
+- `frontend/app/composables/useApiFetch.ts` -- envelope-unwrapping
+  `useFetch` wrapper. `unwrapEnvelope<T>` + `resolveApiBaseURL(isServer,
+  flaskUrl)` extracted as pure helpers (12 vitest cases). SSR baseURL
+  set to `useRuntimeConfig().flaskUrl` because Vite devProxy is a
+  dev-server middleware that does NOT intercept Nitro's internal SSR
+  `$fetch`. Read pages (`/locations`, `/events`) retrofitted to consume
+  the envelope-aware composable.
+
+#### Tests
+
+- Frontend vitest 73/73 (Phase 4 added: login-handler 2, useAuth 14,
+  useApi 4 carryover, auth-guard cases, useApiFetch 12, plus existing
+  flask-client / auth-forward / cookies). All green.
+- Backend pytest 46/46 (foundation 5 + auth 18 + locations 10 + events
+  12 + integration 1). All green against real MySQL.
+- E2E auth chain verified by curl: login -> me -> revalidate -> logout
+  through Apache dev vhost (`dev.thedreamerscave.club`) with HTTP basic
+  auth, BFF cookies, Flask back-end, MySQL persistence.
+
+### Changed
+
+- `frontend/nuxt.config.ts` -- removed `nitro.devProxy` block. Replaced
+  with per-prefix `routeRules.proxy` entries for the read endpoints
+  (`/api/locations`, `/api/events`, `/api/health`, etc.). Reason: Nitro's
+  `devProxy` registers as h3 middleware BEFORE the worker that hosts
+  `server/api/*` routes, so a catch-all `/api` rule silently swallowed
+  the BFF. `routeRules.proxy` is integrated with the route registry --
+  static server routes win. Phase 6 Apache vhost is the prod analog.
+- `frontend/server/utils/flask-client.ts` -- added `nitropack/runtime`
+  module-level fallback for `useRuntimeConfig`. The Phase 3 TD-009
+  closure assumed `useRuntimeConfig` would be on `globalThis` in real
+  Nitro context; in dev/prod it is rewritten by the bundler to a
+  `#imports` binding (NOT placed on globalThis). Pattern now mirrors
+  `auth-forward.ts` and `cookies.ts`: globalThis stub (tests) ->
+  imported helper (Nitro) -> explicit throw.
+- `frontend/app/types/api.ts` -- envelope contract tightened. `ApiResponse<T>`
+  has `success: true` discriminant; new `ApiErrorResponse` has
+  `success: false`. BFF unwraps `.data` consistently.
+- `frontend/app/pages/locations/index.vue` and
+  `frontend/app/pages/events/index.vue` -- migrated from raw
+  `useFetch<T[]>` (which iterated the envelope object as if it were the
+  array) to `useApiFetch<T[]>`.
+- `docs/TECH_DEBT.md` -- TD-014 / TD-015 / TD-016 / TD-017 opened with
+  resolution triggers.
+
+### Fixed
+
+- **JWT_SECRET_KEY HIGH blocker (phase-end triple review)**: Flask
+  emitted tokens signed with a default placeholder when the env var
+  was unset, silently. Fixed by raising at app boot. Aligns with
+  CLAUDE.md security rule 6.
+- **BFF/Flask envelope contract drift (scan row 15)**: backend Flask
+  used `responses.success(data)` envelope `{success, data}` per project
+  convention; BFF Tasks 4.1-4.2 (already shipped uncommitted) read flat
+  shape (`response.access`). Independently both sides passed unit
+  tests because no integration test crossed the boundary; browser login
+  would have set undefined cookies. BFF retrofitted to unwrap `.data`.
+- **Nitro devProxy swallowing BFF routes**: see Changed -> nuxt.config.ts.
+- **Vite devProxy not intercepting SSR $fetch**: see Added ->
+  useApiFetch.ts. SSR baseURL set explicitly from runtime config.
+- **useRuntimeConfig not on globalThis in real Nitro context**: see
+  Changed -> flask-client.ts.
+- **`/api/v1` -> `/api` prefix realignment**: README, CHANGELOG (this
+  file), `docs/api/health.md`, `docs/deployment/development.md`, and
+  CLAUDE.md project-structure inventory all reference the new prefix.
+
+### Security
+
+- `JWT_SECRET_KEY` now REQUIRED at boot. No silent placeholder.
+- Refresh token rotation verified end-to-end by integration smoke
+  (every refresh issues a new refresh).
+- Cookie contract from Phase 2 unchanged: `tdc_access` HttpOnly Lax
+  Path=/, `tdc_refresh` HttpOnly Strict Path=/api/auth.
+- bcrypt password verification (12-round cost) per CLAUDE.md security
+  rule 5.
+- Admin gate on `/api/revalidate` -- 401 (no/invalid Bearer) vs 403
+  (logged in but role != admin) disambiguated only by status code, not
+  by body.
+- Path validation on revalidate body: rejects `..` (traversal), `//`
+  (ambiguous routing), >500 chars, missing leading `/`.
+
+### Tests
+
+- vitest 73/73 (frontend); pytest 46/46 (backend).
+- Real-MySQL fixtures throughout backend tests; conftest restores DB
+  state between sessions. State cleanup verified at phase end.
+- Full E2E auth chain via curl with Apache dev vhost
+  (`dev.thedreamerscave.club`).
+
+### Infrastructure
+
+- Apache dev vhost set up mid-Phase-4 per user decision: HTTP -> HTTPS
+  redirect + Let's Encrypt cert + HTTP basic auth (`tdctest`) +
+  ProxyPass to Nuxt :9503 (Nuxt internal routing handles `/api/auth`,
+  `/api/revalidate`, with `routeRules.proxy` to Flask :9502 for other
+  `/api`). Cert stays separate from `unified-cert` for now.
+- New test database `tdcweb_test`, schema-replicated from `tdcweb_dev`,
+  managed by pytest conftest fixtures.
+
+### Verification
+
+- `nuxi typecheck`: 0 errors.
+- `npm test`: 73/73.
+- `pytest`: 46/46 against real MySQL.
+- E2E auth chain: login -> me -> revalidate -> logout via curl on
+  `https://dev.thedreamerscave.club/`, all 200/204 with correct cookie
+  semantics.
+- DB state restored to clean baseline post-tests.
+
+### Deferred / Open
+
+- **TD-014** (`NUXT_FLASK_URL` deployment runbook): resolution trigger
+  is Phase 6 systemd unit drafting.
+- **TD-015** (login-page open-redirect validation): trigger is first
+  task creating `app/pages/auth/login.vue`.
+- **TD-016** (BFF handler unit-test coverage for logout/refresh/me):
+  trigger is first refactor of any of the three handlers.
+- **TD-017** (events.location_id NULL coerced to 0): trigger is first
+  task admitting nullable-venue events.
+- **TD-007** (`docs/DESIGN.md` consolidation): scheduled for end of
+  Phase 4 per its own resolution trigger; deferred to a dedicated
+  design pass.
+- **TD-011** (jazzclub palette chrome contrast): trigger is first
+  jazzclub-themed page; no Phase 4 page sets `[data-location="jazzclub"]`.
+- **TD-012** (`useFormattedDate`): trigger is first user-friendly date
+  rendering surface.
+- **TD-013** (livemagic vs `--color-error` collision): trigger is
+  first livemagic-themed page surfacing both a primary CTA and an
+  error.
+
+**Spec:** `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
+**Plan:** `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
+**Scan:** `docs/reviews/2026-04-25-user-intent-scan-phase-4.md`
+**Commits:** atomic Phase 4 commit (SHA to be filled in by controller
+after commit).
+
+---
+
 ## [2026-04-24] — Phase 3 (Nuxt 4 frontend port — pages, components, composables, stores, i18n)
 
 Phase 3 ports the surviving frontend surface from the Vue 3 + Vite backup
@@ -392,9 +626,13 @@ cleanup — replace `<phase-2-commit>` with real SHA in TECH_DEBT TD-006).
   - Success responses: `success()`, `created()`, `no_content()`, `paginated()`
   - Error responses: `bad_request()`, `unauthorized()`, `forbidden()`, `not_found()`, `server_error()`
 - Health check endpoints (`backend/app/routes/api/health.py`)
-  - `GET /api/v1/health` - Basic health check
-  - `GET /api/v1/health/db` - Database connectivity check
-  - `GET /api/v1/health/full` - Full system health check
+  - `GET /api/health` - Basic health check
+  - `GET /api/health/db` - Database connectivity check
+  - `GET /api/health/full` - Full system health check
+  - (Originally shipped at `/api/v1/*`; prefix dropped to `/api/*`
+    pre-flight before Phase 4B.2 -- the `v1` was scaffolding leftover
+    contradicting spec/plan/CLAUDE.md. Endpoint paths above reflect the
+    as-built state.)
 - WSGI entry point for Gunicorn (`backend/wsgi.py`)
 - CORS configuration for development and production origins
 

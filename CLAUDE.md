@@ -484,7 +484,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 │   │   ├── config.py
 │   │   ├── models/              # MySQL table bindings
 │   │   ├── routes/
-│   │   │   ├── api/             # Public REST API (/api/v1/*)
+│   │   │   ├── api/             # Public REST API (/api/*)
 │   │   │   └── admin/           # Admin-only endpoints
 │   │   ├── services/            # Business logic layer
 │   │   ├── utils/               # db.py, responses.py, decorators.py, validators.py
@@ -498,9 +498,11 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 │   │   ├── assets/css/          # main.css (Tailwind v4 + @theme + location vars)
 │   │   ├── components/          # <AppHeader />, by-domain subfolders (later phases)
 │   │   ├── composables/         # useLocationTheme, useScrollAnimation (later phases)
+│   │   ├── middleware/          # auth.ts, admin.ts, staff.ts (route guards, Phase 4)
 │   │   ├── plugins/             # gsap.client.ts, lenis.client.ts (client-only)
 │   │   ├── stores/              # Pinia (user.ts, ui.ts, … later phases)
-│   │   └── types/               # Shared TS types (api, user, location, event)
+│   │   ├── types/               # Shared TS types (api, user, location, event)
+│   │   └── utils/               # auth-guard.ts (pure helpers, Phase 4)
 │   ├── server/                  # Nitro server routes — hybrid BFF
 │   │   ├── api/                 # auth/**, revalidate (later phases)
 │   │   ├── middleware/          # auth-forward.ts

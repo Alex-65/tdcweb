@@ -111,15 +111,30 @@ and Nuxt's node process can reach Flask.
 ### 5.2 Development flow
 
 ```
-[Browser] ──► :9503 Nuxt dev (nitro + Vite HMR)
-                  │
-                  ├─ /api/**  (except /api/auth/**, /api/revalidate)
-                  │           → nitro devProxy → :9502 Flask
-                  │
-                  └─ /api/auth/**, /api/revalidate
-                              → Nuxt server/api/ (BFF)
-                              → internally $fetch to :9502 Flask
+[Browser] --> :9503 Nuxt dev (nitro + Vite HMR)
+                  |
+                  +-- /api/**  (except /api/auth/**, /api/revalidate)
+                  |           --> routeRules.proxy --> :9502 Flask
+                  |
+                  +-- /api/auth/**, /api/revalidate
+                              --> Nuxt server/api/ (BFF)
+                              --> internally $fetch to :9502 Flask
 ```
+
+> Earlier drafts of this section used `nitro.devProxy` for the public
+> read endpoints. Phase 4 end-of-phase integration smoke surfaced a
+> routing precedence bug: Nitro's `devProxy` registers as h3 middleware
+> BEFORE the worker that hosts `server/api/*` routes, so a catch-all
+> `/api` rule silently swallows `/api/auth/**` and `/api/revalidate`
+> (the BFF) before Nitro can route them. POST `/api/auth/login` would
+> bypass the BFF entirely. As-built `nuxt.config.ts` therefore uses
+> per-prefix `routeRules.proxy` entries (one per Flask read endpoint --
+> `/api/locations`, `/api/events`, `/api/health`, `...`); these are
+> integrated with the route registry, so static server routes win over
+> the glob proxy rules. In production Apache (sec 5.3) does the same
+> split at the reverse-proxy layer, so the dev-mode `routeRules.proxy`
+> entries are the dev analog of the prod Apache rules, not a
+> production codepath.
 
 ### 5.3 Production flow
 
@@ -206,7 +221,8 @@ frontend/
 │   ├── plugins/
 │   │   ├── gsap.client.ts            Register GSAP + ScrollTrigger (client-only)
 │   │   └── lenis.client.ts           Init Lenis, sync with gsap.ticker
-│   ├── utils/                        Pure helpers (format, slugify)
+│   ├── utils/                        Pure helpers (auto-imported by Nuxt)
+│   │   └── auth-guard.ts             buildLoginRedirect / decide{Auth,Admin,Staff}Outcome (Phase 4)
 │   ├── assets/
 │   │   └── css/
 │   │       ├── main.css              Tailwind layers
@@ -333,11 +349,63 @@ export default defineNuxtConfig({
 
 ```typescript
 // server/api/revalidate.post.ts
+//
+// Cache-key format derived from the Nitro source rather than guessed.
+// Nitro stores SWR / cached route entries under unstorage keys of the
+// form:
+//
+//   cache:nitro:routes:_:<escapedPathname>.<hash>.json
+//
+// where <escapedPathname> = escapeKey(decodeURI(pathname)) (strips \W,
+// truncated to 16 chars; falls back to "index" when the strip empties
+// the string), and <hash> is a content hash of the full request URL
+// (path + query + varies). Source:
+//   - nitropack/dist/runtime/internal/cache.mjs lines 29 and 124-145
+//     (escapeKey, key construction)
+//   - nitropack/dist/runtime/internal/app.mjs line 131
+//     (default group name "nitro/routes")
+// On-disk layout `.nuxt/cache/nitro/routes/_/<pathname>.<hash>.json`
+// confirms the shape.
+//
+// Implication: an admin-supplied path does not map to a single key (a
+// route may have several cached variants per query string / vary header).
+// We therefore list keys under the per-path prefix and remove every
+// match, rather than `removeItem(<single-key>)`. If Nitro changes its
+// key format, this handler silently no-ops -- the worst case is
+// staleness until the next SWR tick, never wrong content.
+import { defineEventHandler } from 'h3'
+import { z } from 'zod'
+
+const ESCAPE_NON_WORD = /\W/g
+
+// Mirror nitropack's escapeKey() exactly so our prefix matches what
+// Nitro wrote.
+const encodePathname = (path: string): string => {
+  const pathname = decodeURI(path.split('?')[0] ?? path)
+  const stripped = pathname.replace(ESCAPE_NON_WORD, '').slice(0, 16)
+  return stripped || 'index'
+}
+
+const revalidateSchema = z.object({
+  path: z.string().min(1).max(500).startsWith('/'),
+})
+
 export default defineEventHandler(async (event) => {
   await requireAdmin(event)
-  const { path } = await readBody<{ path: string }>(event)
-  const storage = useStorage('cache:nitro')
-  await storage.removeItem(`nitro:routes:${path}.json`)
+  const { path } = await readValidatedBody(event, (input) =>
+    revalidateSchema.parse(input),
+  )
+
+  const encoded = encodePathname(path)
+  // Within the `cache:nitro:routes` storage mount, keys lose the mount
+  // prefix; the actual key is `_:<encoded>.<hash>.json`. We list under
+  // the default group `_` and filter by `_:<encoded>.` prefix.
+  const storage = useStorage('cache:nitro:routes')
+  const allKeys = await storage.getKeys('_')
+  const prefix = `_:${encoded}.`
+  const matching = allKeys.filter((k) => k.startsWith(prefix))
+  await Promise.all(matching.map((k) => storage.removeItem(k)))
+
   return { revalidated: path }
 })
 ```
@@ -346,6 +414,11 @@ Trigger: when an admin saves a location / artist / event / blog post via
 the admin panel, the client POSTs `/api/revalidate` with the affected
 path(s). Nitro cache is cleared for that path. The next public request
 regenerates.
+
+> Earlier drafts of this section showed
+> `storage.removeItem('nitro:routes:${path}.json')`. That key shape was
+> a guess; the as-built handler above (Phase 4 Task 4.3) follows the
+> Nitro source verbatim. Reconciled at Phase 4 docs-sync.
 
 ### 7.4 SEO modules
 

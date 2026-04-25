@@ -1114,41 +1114,64 @@ extractor and our unit tests depend on this casing.
 ```typescript
 // server/utils/flask-client.ts
 import type { H3Event } from 'h3'
+import { $fetch as ofetchImpl } from 'ofetch'
+import { useRuntimeConfig as nitroUseRuntimeConfig } from 'nitropack/runtime'
 
 type FetchFn = typeof $fetch
 type RuntimeConfigFn = () => { flaskUrl: string } & Record<string, unknown>
 
-const getFetch = (): FetchFn =>
-  (globalThis as unknown as { $fetch: FetchFn }).$fetch
+const resolveFetch = (): FetchFn => {
+  const stubbed = (globalThis as unknown as { $fetch?: FetchFn }).$fetch
+  return stubbed ?? (ofetchImpl as unknown as FetchFn)
+}
 
-const getRuntimeConfig = (): ReturnType<RuntimeConfigFn> =>
-  (globalThis as unknown as { useRuntimeConfig: RuntimeConfigFn }).useRuntimeConfig()
+const resolveRuntimeConfig = (): ReturnType<RuntimeConfigFn> => {
+  const stubbed = (globalThis as unknown as { useRuntimeConfig?: RuntimeConfigFn })
+    .useRuntimeConfig
+  if (stubbed) return stubbed()
+  // No globalThis stub (real Nitro context). Use the imported runtime
+  // helper. In vitest the import resolves but the call returns undefined
+  // because the Nitro virtual config module is empty; we treat that as
+  // "neither path bound" and throw the same explicit error the original
+  // implementation used, so the unit-test contract stays stable.
+  const fromModule = nitroUseRuntimeConfig() as
+    | ReturnType<RuntimeConfigFn>
+    | undefined
+  if (!fromModule) {
+    throw new Error('flaskFetch: useRuntimeConfig is not available')
+  }
+  return fromModule
+}
 
 export const flaskFetch = <T = unknown>(
   url: string,
   event: H3Event,
   options: Parameters<typeof $fetch<T>>[1] = {},
 ): Promise<T> => {
-  const { flaskUrl } = getRuntimeConfig()
+  const { flaskUrl } = resolveRuntimeConfig()
   const flaskHeaders = (event.context.flaskHeaders ?? {}) as Record<string, string>
-  return getFetch()<T>(url, {
+  return resolveFetch()<T>(url, {
     baseURL: flaskUrl,
     ...options,
     headers: { ...flaskHeaders, ...(options.headers ?? {}) },
-  })
+  }) as Promise<T>
 }
 ```
 
-> **⚠️ Known risk — TD-009.** `flaskFetch` currently reads `$fetch` and
-> `useRuntimeConfig` **only** from `globalThis`, without the h3-import
-> fallback used in `auth-forward.ts`. Unit tests pass because they
-> install globalThis stubs. Whether Nitro's prod bundle actually keeps
-> `$fetch` / `useRuntimeConfig` on globalThis across all code paths is
-> **unverified** — Phase 2 Task 2.7 proved `getCookie` is NOT on
-> globalThis in prod, so by analogy these may also be module bindings.
-> When Phase 4 wires the first real BFF route that calls `flaskFetch`,
-> verify in prod and retrofit the resilient pattern if needed. See
-> `docs/TECH_DEBT.md` TD-009.
+> **TD-009 closed (Phase 3 Task 3.0) and revisited (Phase 4 phase-end
+> integration smoke).** The original Phase 2 implementation read
+> `$fetch` and `useRuntimeConfig` only from `globalThis` -- unit tests
+> passed because they installed globalThis stubs, but the prod-Nitro
+> path was unverified. Task 3.0 added a stub-first / `ofetch`-fallback
+> pattern for `$fetch` and an explicit throw for `useRuntimeConfig`.
+> Phase 4 integration smoke then surfaced that in real Nitro dev/prod
+> the `useRuntimeConfig` identifier is rewritten by the bundler to a
+> `#imports` binding (NOT placed on globalThis, contrary to the
+> earlier assumption) -- every BFF call 500'd. The fix above adds a
+> `nitropack/runtime` module-level fallback for `useRuntimeConfig`,
+> mirroring the `ofetch` fallback for `$fetch`. The throw remains as
+> the third-tier safety net for tests that explicitly delete the stub
+> without providing a Nitro context.
 
 ### 11.5 Cookie helpers
 
@@ -2007,6 +2030,55 @@ test('login flow sets HttpOnly cookies and redirects', async ({ page, context })
 - Nuxt / Vue / Pinia internals
 - Trivial passthroughs (component that just renders a prop)
 - Styling (covered by visual regression, not unit tests)
+
+### 19.7 Pure-helper extraction (canonical TDC pattern)
+
+Composables and middlewares that depend on Nuxt auto-imports
+(`useAuthStore`, `useRequestFetch`, `storeToRefs`, `useRuntimeConfig`,
+`useFetch`, `navigateTo`, `useRoute`, ...) are awkward to unit-test:
+the auto-imports are injected by the unimport transformer, not by ESM
+resolution, so intercepting them in vitest is fragile (the test runs
+outside the Nuxt build pipeline). The pattern that solved this in
+Phase 3 (`useApi`, scan row 3 typed-mock lesson) and was generalised
+across Phase 4 (Tasks 4.4 + 4B.4) is:
+
+1. Put all non-trivial decision logic into a pure helper exported
+   alongside the composable / middleware. The helper takes its
+   dependencies (store, fetcher, route info, runtime config, ...) as
+   arguments. It has no auto-imports, no globals, and no side effects
+   beyond what the injected dependencies do.
+2. The exported `useFoo()` (composable) or default `defineNuxtRoute-
+   Middleware(...)` (middleware) is a thin wire-up of the auto-imports
+   to the helper.
+3. Vitest tests target the pure helper exhaustively (happy path, error
+   paths, edge cases). The thin wrapper is exercised transitively by
+   phase-end Playwright E2E.
+
+Phase 4 produced four concrete instances:
+
+| File | Pure helper(s) | Test file |
+|---|---|---|
+| `app/composables/useApi.ts` | `RetryableFetchOptions` typed shape | `tests/unit/useApi.test.ts` (4 cases) |
+| `app/composables/useApiFetch.ts` | `unwrapEnvelope<T>`, `resolveApiBaseURL(isServer, flaskUrl)` | `tests/unit/useApiFetch.test.ts` (12 cases) |
+| `app/composables/useAuth.ts` | `buildAuthOps(store, fetcher)` | `tests/unit/useAuth.test.ts` |
+| `app/utils/auth-guard.ts` | `buildLoginRedirect`, `decideAuthOutcome`, `decideAdminOutcome`, `decideStaffOutcome` | `tests/unit/auth-guard.test.ts` |
+
+Trade-off: the wire-up wrapper at the end of the file is technically
+untested at unit level. Acceptable in TDC because:
+
+- The wrapper's only logic is pulling auto-imports and forwarding them.
+  Anything more substantive is what the helper is for.
+- The phase-end Playwright E2E runs every wrapper through the real
+  Nuxt runtime, with real cookies, real navigation, real Flask round-
+  trips. A regression in the wrapper surfaces there.
+- Adding `@nuxt/test-utils/runtime` boot to every helper test would
+  triple test runtime for negligible coverage gain on the wire-up
+  path.
+
+When you write a new composable / middleware that depends on auto-
+imports, default to this shape. If the file has only auto-imports + a
+single auto-import call (no real logic), don't extract -- there is
+nothing to test.
 
 ---
 

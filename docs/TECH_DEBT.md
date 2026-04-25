@@ -232,6 +232,54 @@ buffer for deferred work.
 
 ---
 
+### 🟡 TD-014 · `NUXT_FLASK_URL` SSR-side requirement not yet documented in deployment runbook
+
+- **Source:** Task 4B.4 (working tree, 2026-04-25). Code review HIGH/MEDIUM fix round.
+- **Issue:** `frontend/app/composables/useApiFetch.ts` introduced `resolveApiBaseURL(isServer, flaskUrl)` which throws on SSR if `runtimeConfig.flaskUrl` is empty/undefined. This is intentional (loud-fail beats silent 404 for every page that uses the composable), but the operational requirement -- "the SSR Node process MUST have `NUXT_FLASK_URL` set in its environment" -- is not yet codified in any deployment runbook. `nuxt.config.ts` has a dev fallback `'http://localhost:9502'`, so dev never trips; prod will trip on the first SSR request if the systemd unit / Apache reverse-proxy host file doesn't export the var.
+- **Why it's open:** Phase 6 owns deployment (Apache vhosts, systemd units, prod env files). Documenting this in `docs/deployment/` ahead of Phase 6 risks creating a stub doc that drifts; folding it into the Phase 6 deliverable is the clean fit. Rule 18 fix-now-if-possible was honored on the code side (the throw exists); the runbook side is the genuinely deferred portion.
+- **Impact:** medium-pending. Zero impact today (dev has fallback). Materializes the moment Phase 6 lands prod SSR -- without the env var, every public page (locations, events, artists, blog, home) fails on first request with the explicit error. The throw makes diagnosis trivial (no silent 404s) but the runbook should pre-empt the misconfig.
+- **Resolution trigger:** Phase 6 deployment runbook drafting. Specifically the systemd unit definition for the Nuxt SSR service and the Apache vhost env-var section.
+- **Close when:** `docs/deployment/` (or equivalent Phase 6 runbook) contains an explicit "Required SSR environment variables" section listing `NUXT_FLASK_URL` (with the prod target, e.g. `http://localhost:9500`), `NUXT_COOKIE_SECRET`, `NUXT_PUBLIC_SITE_URL`, `NUXT_PUBLIC_API_BASE`, AND the prod `nuxt.config.ts` (or the systemd unit) is verified to read them at boot. A smoke test "kill `NUXT_FLASK_URL` then hit `/locations`, verify the loud error" closes the loop.
+
+---
+
+### 🟡 TD-015 · Login page must validate `?redirect=` param against open-redirect
+
+- **Source:** Task 4.4 (working tree, 2026-04-25). Code review LOW finding flagged for follow-up at login-page implementation time.
+- **Issue:** The three route guards (`auth`/`admin`/`staff`) bounce unauthenticated users to `/auth/login?redirect=<encodeURIComponent(to.fullPath)>`. The redirect target is sourced from Vue Router's `to.fullPath`, which is always a relative path (Vue Router refuses absolute URLs as routes), so the guard side is safe. However, the LOGIN PAGE itself (not yet built) will have to read the `redirect` query param and `navigateTo` to it after a successful login. If the login page accepts the param without validation, an attacker could craft `/auth/login?redirect=https://evil.example/phish` and the post-login handler would happily redirect users off-site -- classic open-redirect (CWE-601). Phishing vector: a TDC-themed link arrives in email, user clicks, lands on real `/auth/login`, logs in legitimately, then gets bounced to attacker domain that mimics TDC and harvests further data.
+- **Why it's open:** the login page is a future task (Phase 4 only built the BFF + composable + guards, not UI pages). Pre-emptively writing the validator now without the page would land orphan code.
+- **Impact:** medium. Zero impact today (no login page consumes the redirect). Materializes the moment the login page reads the param. Easy to forget if not tracked.
+- **Resolution trigger:** first task that creates `app/pages/auth/login.vue` (or wherever the login form lives). At that point, the post-login redirect handler MUST: parse the param via `URLSearchParams`, reject anything not matching `^/(?!/)` (relative path with single leading slash, no protocol-relative `//evil.com`), default to `/` on rejection, and ideally log the rejection for security observability.
+- **Close when:** the login page implements the validation, has a vitest unit test that asserts rejection of `https://...`, `//evil.com`, `javascript:...`, and acceptance of legit relative paths like `/dashboard`, `/dashboard?tab=x`. Mention the validator helper in `docs/frontend/nuxt-playbook.md` § auth.
+
+---
+
+### 🟢 TD-016 · BFF auth handlers (logout/refresh/me) lack direct unit-test coverage
+
+- **Source:** Phase 4 holistic review (working tree, 2026-04-25). MEDIUM forward-looking finding.
+- **Issue:** Three of the four BFF auth handlers ship without dedicated vitest unit specs:
+  - `frontend/server/api/auth/logout.post.ts` -- has try/catch fallback that clears cookies even if the Flask call throws; not asserted.
+  - `frontend/server/api/auth/refresh.post.ts` -- extracts the refresh cookie, calls Flask, rotates cookies; rotation logic not asserted at unit level.
+  - `frontend/server/api/auth/me.get.ts` -- gates on `event.context.flaskHeaders` being defined; the gate is not asserted.
+  Login (`login.post.ts`) does have a test (`tests/unit/login-handler.test.ts`). Indirect coverage exists at two layers: backend pytest exercises Flask `/api/auth/*` end-to-end with real MySQL, and `useAuth.test.ts` mocks the fetcher so the composable's interaction with each route is verified. But the BFF wiring itself (cookie-set/clear sequencing, error fallthrough behavior, header gate) has no dedicated unit assertion.
+- **Why it's open:** Phase 4 phase-end real tests (Playwright E2E for the full login -> me -> refresh -> logout chain) cover this transitively; adding three more handler-level specs at phase end wasn't a blocker for shipping the code. Logging here so the gap is visible if any of those handlers gets touched again.
+- **Impact:** low. A regression in any of the three handlers would surface immediately in E2E. No silent-failure path identified.
+- **Resolution trigger:** first refactor or behavior change to any of the three handlers, OR phase that introduces a new BFF auth concept (registration, password reset). At that point, mirror the `login-handler.test.ts` pattern: typed-globalThis stubs for `flaskFetch`/cookie helpers, assert handler returns expected shape, assert side effects (cookie set/clear) called with correct args.
+- **Close when:** `tests/unit/{logout,refresh,me}-handler.test.ts` exist with at minimum one happy-path + one failure-path assertion each, and total vitest count grew accordingly.
+
+---
+
+### 🟢 TD-017 · `events.location_id` NULL coerced to 0 (type alignment)
+
+- **Source:** Phase 4B.3 + holistic review (working tree, 2026-04-25). LOW finding.
+- **Issue:** `backend/app/routes/api/events.py:111` coerces a NULL `location_id` to `0` before serializing to JSON. The DB schema permits NULL (events without an assigned venue, e.g. tentative future events). Frontend TS types currently declare `location_id: number`, which forced the coercion. Two consequences: (a) callers reading `event.location_id === 0` cannot distinguish "no venue assigned" from "venue with id 0" (which doesn't exist today, so accidental collision is unlikely but the semantics are wrong), (b) inline comment claims a TECH_DEBT entry exists for this -- this entry is that one.
+- **Why it's open:** Phase 4B was scoped to read endpoints; expanding event types to admit nullable location was beyond scope. Frontend pages only display location_id transitively (via location-name lookup), so the coercion is invisible to current users.
+- **Impact:** low. Cosmetic + semantic correctness. No data corruption.
+- **Resolution trigger:** first task that adds an event-creation form OR an event-without-venue UX (e.g. "tentative" event states), OR any frontend code that needs to branch on "has venue vs. no venue".
+- **Close when:** TS types updated to `location_id: number | null`, backend stops coercing, frontend grep `event.location_id === 0` returns nothing, and at least one test asserts the NULL pass-through.
+
+---
+
 ### 🟢 TD-005 · Transitive deprecation warnings in npm
 
 - **Source:** Tasks 1.3 and 1.4

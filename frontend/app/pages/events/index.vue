@@ -3,7 +3,7 @@ import type { Event } from '~/types/event'
 
 const { t } = useI18n()
 
-const { data: events, error } = await useFetch<Event[]>('/api/events', {
+const { data: events, error } = await useApiFetch<Event[]>('/api/events', {
   key: 'events-list',
   query: { upcoming: 'true' },
 })

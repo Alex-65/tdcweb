@@ -2230,18 +2230,35 @@ Write `/data1/tdcweb-dev/frontend/tests/unit/login-handler.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { H3Event } from 'h3'
 
-const readValidatedBodyMock = vi.fn()
-const flaskFetchMock = vi.fn()
-const setAccessCookieMock = vi.fn()
-const setRefreshCookieMock = vi.fn()
+// Typed shapes for the globalThis stubs. Mirrors the Phase 3 Gap #1
+// lesson (no `as any` in test mocks): each stub is cast through
+// `unknown` to a specific function-shape interface. Reconciled at
+// Phase 4 docs-sync.
+type DefineEventHandlerStub = <T>(h: T) => T
+type ReadValidatedBodyStub = ReturnType<typeof vi.fn>
+type FlaskFetchStub = ReturnType<typeof vi.fn>
+type SetCookieStub = ReturnType<typeof vi.fn>
+type CreateErrorStub = (opts: { statusCode: number; statusMessage: string }) => Error
 
-;(globalThis as any).defineEventHandler = (h: any) => h
-;(globalThis as any).readValidatedBody = readValidatedBodyMock
-;(globalThis as any).flaskFetch = flaskFetchMock
-;(globalThis as any).setAccessCookie = setAccessCookieMock
-;(globalThis as any).setRefreshCookie = setRefreshCookieMock
-;(globalThis as any).createError = (opts: any) => Object.assign(new Error(opts.statusMessage), opts)
+const readValidatedBodyMock: ReadValidatedBodyStub = vi.fn()
+const flaskFetchMock: FlaskFetchStub = vi.fn()
+const setAccessCookieMock: SetCookieStub = vi.fn()
+const setRefreshCookieMock: SetCookieStub = vi.fn()
+
+;(globalThis as unknown as { defineEventHandler: DefineEventHandlerStub })
+  .defineEventHandler = (h) => h
+;(globalThis as unknown as { readValidatedBody: ReadValidatedBodyStub })
+  .readValidatedBody = readValidatedBodyMock
+;(globalThis as unknown as { flaskFetch: FlaskFetchStub })
+  .flaskFetch = flaskFetchMock
+;(globalThis as unknown as { setAccessCookie: SetCookieStub })
+  .setAccessCookie = setAccessCookieMock
+;(globalThis as unknown as { setRefreshCookie: SetCookieStub })
+  .setRefreshCookie = setRefreshCookieMock
+;(globalThis as unknown as { createError: CreateErrorStub })
+  .createError = (opts) => Object.assign(new Error(opts.statusMessage), opts)
 
 import loginHandler from '../../server/api/auth/login.post'
 
@@ -2255,12 +2272,18 @@ describe('POST /api/auth/login', () => {
 
   it('sets both cookies and returns the user on success', async () => {
     readValidatedBodyMock.mockResolvedValue({ email: 'a@b.c', password: 'pw' })
+    // Flask responses use the canonical envelope shape per Phase 4
+    // user-intent scan row 15: { success: true, data: { ... } }. The
+    // BFF unwraps `.data`. Reconciled at Phase 4 docs-sync.
     flaskFetchMock.mockResolvedValue({
-      access: 'acc',
-      refresh: 'ref',
-      user: { id: 1, email: 'a@b.c', username: 'u', role: 'user' },
+      success: true,
+      data: {
+        access: 'acc',
+        refresh: 'ref',
+        user: { id: 1, email: 'a@b.c', username: 'u', role: 'user' },
+      },
     })
-    const event = {} as any
+    const event = {} as H3Event
 
     const result = await loginHandler(event)
 
@@ -2271,7 +2294,7 @@ describe('POST /api/auth/login', () => {
 
   it('rejects invalid body with 400', async () => {
     readValidatedBodyMock.mockRejectedValue(new Error('validation failed'))
-    const event = {} as any
+    const event = {} as H3Event
 
     await expect(loginHandler(event)).rejects.toThrow()
   })
@@ -2289,13 +2312,14 @@ Write `/data1/tdcweb-dev/frontend/server/api/auth/login.post.ts`:
 
 ```typescript
 import { z } from 'zod'
+import type { ApiResponse } from '~/types/api'
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 })
 
-interface FlaskLoginResponse {
+interface FlaskLoginPayload {
   access: string
   refresh: string
   user: {
@@ -2309,15 +2333,19 @@ interface FlaskLoginResponse {
 export default defineEventHandler(async (event) => {
   const body = await readValidatedBody(event, (input) => loginSchema.parse(input))
 
-  const response = await flaskFetch<FlaskLoginResponse>('/api/auth/login', event, {
-    method: 'POST',
-    body,
-  })
+  // Flask responses use the canonical envelope per `app/utils/responses.py`:
+  // `{ success: true, data: { ... } }`. The BFF unwraps `.data`. Reconciled
+  // at Phase 4 docs-sync (user-intent scan row 15).
+  const response = await flaskFetch<ApiResponse<FlaskLoginPayload>>(
+    '/api/auth/login',
+    event,
+    { method: 'POST', body },
+  )
 
-  setAccessCookie(event, response.access)
-  setRefreshCookie(event, response.refresh)
+  setAccessCookie(event, response.data.access)
+  setRefreshCookie(event, response.data.refresh)
 
-  return { user: response.user }
+  return { user: response.data.user }
 })
 ```
 
@@ -2326,13 +2354,13 @@ export default defineEventHandler(async (event) => {
 Run: `cd /data1/tdcweb-dev/frontend && npm test -- login-handler`
 Expected: 2 tests pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Hand off**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/server/api/auth/login.post.ts frontend/tests/unit/login-handler.test.ts
-git commit -m "feat(frontend): add login BFF handler (Zod validation, cookie setting)"
-```
+Per CLAUDE.md rule 15, implementer subagents do NOT commit. The
+working-tree changes accumulate; the controller commits all Phase 4
+code + docs together at the phase-end atomic commit (rule 16(e)).
+The placeholder `git commit` line that earlier drafts of this plan
+included was removed during Phase 4 docs-sync.
 
 ---
 
@@ -2364,7 +2392,9 @@ export default defineEventHandler(async (event) => {
 Write `/data1/tdcweb-dev/frontend/server/api/auth/refresh.post.ts`:
 
 ```typescript
-interface FlaskRefreshResponse {
+import type { ApiResponse } from '~/types/api'
+
+interface FlaskRefreshPayload {
   access: string
   refresh: string
 }
@@ -2375,13 +2405,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'No refresh token' })
   }
 
-  const response = await flaskFetch<FlaskRefreshResponse>('/api/auth/refresh', event, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${refresh}` },
-  })
+  // Envelope unwrap as in login (user-intent scan row 15, Phase 4).
+  const response = await flaskFetch<ApiResponse<FlaskRefreshPayload>>(
+    '/api/auth/refresh',
+    event,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${refresh}` },
+    },
+  )
 
-  setAccessCookie(event, response.access)
-  setRefreshCookie(event, response.refresh)
+  setAccessCookie(event, response.data.access)
+  setRefreshCookie(event, response.data.refresh)
 
   return { success: true }
 })
@@ -2392,6 +2427,7 @@ export default defineEventHandler(async (event) => {
 Write `/data1/tdcweb-dev/frontend/server/api/auth/me.get.ts`:
 
 ```typescript
+import type { ApiResponse } from '~/types/api'
 import type { User } from '~/types/user'
 
 export default defineEventHandler(async (event) => {
@@ -2400,18 +2436,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
   }
 
-  const user = await flaskFetch<User>('/api/auth/me', event)
-  return { user }
+  // Flask `/api/auth/me` returns `success(g.current_user.to_dict())` --
+  // envelope-wrapped User. BFF unwraps `.data`.
+  const response = await flaskFetch<ApiResponse<User>>('/api/auth/me', event)
+  return { user: response.data }
 })
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Hand off**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/server/api/auth/
-git commit -m "feat(frontend): add logout, refresh, me BFF handlers"
-```
+Per CLAUDE.md rule 15, no per-task commit. Phase 4 atomic commit at
+rule 16(e) absorbs these handlers along with the rest of the phase.
 
 ---
 
@@ -2425,35 +2460,72 @@ git commit -m "feat(frontend): add logout, refresh, me BFF handlers"
 Write `/data1/tdcweb-dev/frontend/server/api/revalidate.post.ts`:
 
 ```typescript
+// Cache-key format derived from Nitro source:
+//   cache:nitro:routes:_:<escapedPathname>.<hash>.json
+// where <escapedPathname> = escapeKey(decodeURI(pathname)) (strips \W,
+// 16-char cap, "index" fallback) and <hash> is a content hash of the
+// full request URL. Source: nitropack/dist/runtime/internal/cache.mjs
+// lines 29 and 124-145, default group `nitro/routes` set in
+// runtime/internal/app.mjs line 131. We list under the per-path prefix
+// and remove every match (multiple cached variants per path are normal)
+// rather than `removeItem(<single-key>)`. Reconciled at Phase 4
+// docs-sync -- earlier drafts used `routes:${path}.json`, which was a
+// guess and never matched a real key.
+import { defineEventHandler } from 'h3'
 import { z } from 'zod'
+import type { ApiResponse } from '~/types/api'
+import type { User } from '~/types/user'
+
+const ESCAPE_NON_WORD = /\W/g
+
+const encodePathname = (path: string): string => {
+  const pathname = decodeURI(path.split('?')[0] ?? path)
+  const stripped = pathname.replace(ESCAPE_NON_WORD, '').slice(0, 16)
+  return stripped || 'index'
+}
 
 const revalidateSchema = z.object({
-  path: z.string().startsWith('/'),
+  path: z
+    .string()
+    .min(1)
+    .max(500)
+    .refine((p) => p.startsWith('/'))
+    .refine((p) => !/\.\./.test(p))
+    .refine((p) => !/\/\//.test(p)),
 })
 
 export default defineEventHandler(async (event) => {
-  // Admin check: forward to Flask to validate the user's role
-  const identity = await flaskFetch<{ role: string }>('/api/auth/me', event).catch(() => null)
-  if (!identity || identity.role !== 'admin') {
-    throw createError({ statusCode: 403, statusMessage: 'Admin required' })
+  // Admin gate: piggy-back on auth-forward middleware. Flask's
+  // /api/auth/me returns ApiResponse<User>; BFF unwraps .data.
+  let me: ApiResponse<User>
+  try {
+    me = await flaskFetch<ApiResponse<User>>('/api/auth/me', event)
+  } catch {
+    throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
+  }
+  if (me.data.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'Admin role required' })
   }
 
-  const { path } = await readValidatedBody(event, (input) => revalidateSchema.parse(input))
+  const { path } = await readValidatedBody(event, (input) =>
+    revalidateSchema.parse(input),
+  )
 
-  const storage = useStorage('cache:nitro')
-  await storage.removeItem(`routes:${path}.json`)
+  const encoded = encodePathname(path)
+  const storage = useStorage('cache:nitro:routes')
+  const allKeys = await storage.getKeys('_')
+  const prefix = `_:${encoded}.`
+  const matching = allKeys.filter((k) => k.startsWith(prefix))
+  await Promise.all(matching.map((k) => storage.removeItem(k)))
 
   return { revalidated: path }
 })
 ```
 
-- [ ] **Step 2: Commit**
+- [ ] **Step 2: Hand off**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/server/api/revalidate.post.ts
-git commit -m "feat(frontend): add on-demand revalidate endpoint (admin-gated)"
-```
+No per-task commit (CLAUDE.md rule 15). Phase 4 atomic commit at
+rule 16(e) absorbs this handler.
 
 ---
 
@@ -2472,46 +2544,68 @@ Write `/data1/tdcweb-dev/frontend/app/composables/useAuth.ts`:
 ```typescript
 import type { User } from '~/types/user'
 
+// SSR cookie-forwarding contract. When this composable is invoked from a
+// route middleware during SSR (auth/admin/staff guards), a raw `$fetch`
+// does NOT forward the incoming request's `Cookie` header to the
+// internal `/api/auth/me` Nitro route. The internal handler then sees
+// no `tdc_access` cookie, the auth-forward middleware leaves
+// event.context.flaskHeaders undefined, the chain returns 401, and an
+// authenticated user appears as a guest on every SSR pass.
+//
+// `useRequestFetch()` returns a `$fetch` instance pre-bound to the
+// current H3Event so SSR calls inherit the original request's cookies.
+// On the client it is a pass-through to `$fetch`. We use it for all
+// three BFF calls for consistency. Reconciled at Phase 4 docs-sync;
+// earlier drafts of this snippet used raw `$fetch` with
+// `credentials: 'include'`, which only matters in the browser and does
+// nothing on the SSR side.
 export function useAuth() {
   const store = useAuthStore()
+  const requestFetch = useRequestFetch()
+  const { user, isAuthenticated, isAdmin, isStaff } = storeToRefs(store)
 
   const fetchMe = async () => {
     try {
-      const { user } = await $fetch<{ user: User }>('/api/auth/me', {
-        credentials: 'include',
-      })
-      store.setUser(user)
+      const { user: u } = await requestFetch<{ user: User }>('/api/auth/me')
+      store.setUser(u)
     } catch {
       store.clear()
     }
   }
 
   const login = async (email: string, password: string) => {
-    const { user } = await $fetch<{ user: User }>('/api/auth/login', {
+    const { user: u } = await requestFetch<{ user: User }>('/api/auth/login', {
       method: 'POST',
       body: { email, password },
-      credentials: 'include',
     })
-    store.setUser(user)
-    return user
+    store.setUser(u)
+    return u
   }
 
   const logout = async () => {
-    await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-    store.clear()
+    try {
+      await requestFetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      store.clear()
+    }
   }
 
   return {
-    user: computed(() => store.user),
-    isAuthenticated: computed(() => store.isAuthenticated),
-    isAdmin: computed(() => store.isAdmin),
-    isStaff: computed(() => store.isStaff),
+    user,
+    isAuthenticated,
+    isAdmin,
+    isStaff,
     fetchMe,
     login,
     logout,
   }
 }
 ```
+
+> The as-built `frontend/app/composables/useAuth.ts` extracts the three
+> BFF operations into a pure `buildAuthOps(store, fetcher)` helper
+> exported alongside `useAuth()` for testability. See playbook
+> §19.7 (pure-helper extraction pattern).
 
 - [ ] **Step 2: Write middleware/auth.ts**
 
@@ -2563,13 +2657,18 @@ export default defineNuxtRouteMiddleware(async (to) => {
 })
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Hand off**
 
-```bash
-cd /data1/tdcweb-dev
-git add frontend/app/composables/useAuth.ts frontend/app/middleware/
-git commit -m "feat(frontend): add useAuth composable and auth/admin/staff route guards"
-```
+No per-task commit (CLAUDE.md rule 15). Phase 4 atomic commit at
+rule 16(e) absorbs `useAuth`, `auth-guard.ts`, and the three guard
+middlewares together with the BFF handlers from Tasks 4.1-4.3 and the
+Phase 4B backend.
+
+> The as-built guard middlewares (`auth.ts` / `admin.ts` / `staff.ts`)
+> delegate their decision logic to pure helpers in
+> `app/utils/auth-guard.ts` (`buildLoginRedirect`, `decideAuthOutcome`,
+> `decideAdminOutcome`, `decideStaffOutcome`). Each middleware is a
+> thin wire-up of the auto-imports to the helper. See playbook §19.7.
 
 ---
 

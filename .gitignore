@@ -101,6 +101,9 @@ dist-ssr/
 *.sln
 *.sw?
 
+# MCP tool runtime logs (mysql-admin / mysql-tdcweb operation logs)
+.setting/
+
 # =========================
 # Environment & Secrets
 # =========================

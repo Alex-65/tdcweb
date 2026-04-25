@@ -124,7 +124,7 @@ flask db upgrade
 ### Flask health
 
 ```bash
-curl http://localhost:9502/api/v1/health
+curl http://localhost:9502/api/health
 ```
 
 ```json
@@ -134,7 +134,7 @@ curl http://localhost:9502/api/v1/health
 ### Flask DB connectivity
 
 ```bash
-curl http://localhost:9502/api/v1/health/db
+curl http://localhost:9502/api/health/db
 ```
 
 ### Nuxt landing page (SSR)
@@ -147,7 +147,7 @@ curl -I http://localhost:9503/
 ### Nuxt → Flask proxy (dev)
 
 ```bash
-curl http://localhost:9503/api/v1/health   # served by Flask via Nitro devProxy
+curl http://localhost:9503/api/health   # served by Flask via Nitro devProxy
 ```
 
 ## Frontend tooling
@@ -206,7 +206,7 @@ imports on `globalThis` — this is by design, not a bug.
 1. Check service status: `./dev.sh status`
 2. Verify Flask is reachable from Nuxt's perspective:
    ```bash
-   curl $NUXT_FLASK_URL/api/v1/health
+   curl $NUXT_FLASK_URL/api/health
    ```
 3. Check browser console for CORS or mixed-content errors.
 

@@ -29,6 +29,16 @@
  */
 import type { H3Event } from 'h3'
 import { $fetch as ofetchImpl } from 'ofetch'
+// Nitro runtime fallback for useRuntimeConfig: in vitest the test installs
+// a globalThis stub that wins; in real Nitro dev/prod the bare identifier is
+// rewritten by the bundler to a #imports binding (NOT placed on globalThis,
+// despite TD-009 review's earlier assumption). The stub-first + nitropack/
+// runtime fallback mirrors the dual-source pattern used in auth-forward.ts
+// and cookies.ts. Phase 4 end-of-phase integration smoke surfaced this:
+// every BFF auth request 500'd with "useRuntimeConfig is not available
+// on globalThis" because the original implementation only looked at
+// globalThis with no module-level fallback.
+import { useRuntimeConfig as nitroUseRuntimeConfig } from 'nitropack/runtime'
 
 type FetchFn = typeof $fetch
 type RuntimeConfigFn = () => { flaskUrl: string } & Record<string, unknown>
@@ -41,14 +51,26 @@ const resolveFetch = (): FetchFn => {
 const resolveRuntimeConfig = (): ReturnType<RuntimeConfigFn> => {
   const stubbed = (globalThis as unknown as { useRuntimeConfig?: RuntimeConfigFn })
     .useRuntimeConfig
-  if (!stubbed) {
+  if (stubbed) {
+    return stubbed()
+  }
+  // No globalThis stub (real Nitro context). Use the imported runtime helper.
+  // In vitest the import resolves but `nitroUseRuntimeConfig()` returns
+  // undefined because the Nitro virtual config module is empty; we treat
+  // that as "neither path is bound" and throw the same explicit error the
+  // original implementation used, so the contract observed by the existing
+  // unit test stays stable.
+  const fromModule = nitroUseRuntimeConfig() as
+    | ReturnType<RuntimeConfigFn>
+    | undefined
+  if (!fromModule) {
     throw new Error(
       'flaskFetch: useRuntimeConfig is not available on globalThis; ' +
         'flaskFetch must be called from a Nitro server route where ' +
         'runtime config is bound',
     )
   }
-  return stubbed()
+  return fromModule
 }
 
 export const flaskFetch = <T = unknown>(

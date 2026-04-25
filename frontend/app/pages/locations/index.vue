@@ -4,7 +4,7 @@ import type { Location } from '~/types/location'
 const { t } = useI18n()
 const localePath = useLocalePath()
 
-const { data: locations, error } = await useFetch<Location[]>('/api/locations', {
+const { data: locations, error } = await useApiFetch<Location[]>('/api/locations', {
   key: 'locations-list',
 })
 

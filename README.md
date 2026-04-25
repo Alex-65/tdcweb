@@ -38,7 +38,7 @@ tdcweb/
 │   │   ├── config.py         # Environment-based config classes
 │   │   ├── models/           # MySQL table bindings (mysql-connector-python)
 │   │   ├── routes/
-│   │   │   ├── api/          # Public REST API (/api/v1/*)
+│   │   │   ├── api/          # Public REST API (/api/*)
 │   │   │   └── admin/        # Admin-only endpoints
 │   │   ├── services/         # Business logic
 │   │   ├── utils/            # db, responses, decorators, validators
@@ -55,10 +55,12 @@ tdcweb/
 │   │   ├── pages/            # index.vue · locations/index.vue · events/index.vue
 │   │   ├── assets/css/       # main.css (Tailwind v4 @theme + location vars + --color-error)
 │   │   ├── components/       # common/AppHeader.vue · common/AppFooter.vue
-│   │   ├── composables/      # useApi · useScrollAnimation · useSmoothScroll · useLocationTheme
+│   │   ├── composables/      # useApi · useApiFetch · useAuth · useScrollAnimation · useSmoothScroll · useLocationTheme
+│   │   ├── middleware/       # auth.ts · admin.ts · staff.ts (route guards, Phase 4)
 │   │   ├── plugins/          # gsap.client.ts, lenis.client.ts (reduced-motion aware)
 │   │   ├── stores/           # auth.ts · locale.ts · ui.ts (Pinia setup syntax)
-│   │   └── types/            # Shared TS types (api, user, location, event)
+│   │   ├── types/            # Shared TS types (api, user, location, event)
+│   │   └── utils/            # auth-guard.ts (pure helpers; Nuxt auto-imports app/utils/)
 │   ├── server/               # Nitro server routes (hybrid BFF)
 │   │   ├── middleware/       # auth-forward.ts
 │   │   └── utils/            # cookies.ts · flask-client.ts (resilient pattern, TD-009 closed)
@@ -147,12 +149,12 @@ tdcweb/
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /api/v1/health` | Basic health check |
-| `GET /api/v1/health/db` | Database connectivity |
-| `GET /api/v1/health/full` | Full system health |
+| `GET /api/health` | Basic health check |
+| `GET /api/health/db` | Database connectivity |
+| `GET /api/health/full` | Full system health |
 
 ```bash
-curl http://localhost:9502/api/v1/health
+curl http://localhost:9502/api/health
 ```
 
 ```json
