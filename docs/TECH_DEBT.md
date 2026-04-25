@@ -297,7 +297,7 @@ buffer for deferred work.
   the two skill files were scheduled for a broader rewrite that would
   naturally incorporate the fix.
 - **Resolution trigger fired:** Phase 5 skill rewrite (2026-04-25).
-- **Closed:** 2026-04-25 · Phase 5 atomic commit `<phase-5-commit>` —
+- **Closed:** 2026-04-25 · Phase 5 atomic commit `f685f5d` —
   `.claude/skills/tdc-frontend/SKILL.md` rewritten end-to-end for the
   Nuxt 4 stack; `.claude/skills/tdc-testing/SKILL.md` rewritten for
   vitest + `@nuxt/test-utils` + happy-dom (frontend) and pytest with
