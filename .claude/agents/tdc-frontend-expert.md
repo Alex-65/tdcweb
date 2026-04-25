@@ -91,7 +91,7 @@ frontend/
 | Meta-framework | **Nuxt 4** (app/ layer, `compatibilityVersion: 4`) |
 | UI | Vue 3 Composition API, `<script setup lang="ts">` always |
 | Language | **TypeScript strict** (`typescript.strict: true`) |
-| Styling | Tailwind CSS + CSS variables (via `@nuxtjs/tailwindcss`) |
+| Styling | **Tailwind CSS v4 CSS-first** via `@tailwindcss/vite` (NOT `@nuxtjs/tailwindcss`); tokens in `app/assets/css/main.css` `@theme` block + per-location CSS vars |
 | Animations | GSAP + ScrollTrigger + Lenis (in `.client.ts` plugins only) |
 | State | Pinia via `@pinia/nuxt` — stores: `auth`, `locale`, `ui` |
 | i18n | `@nuxtjs/i18n` — `prefix_except_default`, EN default, `/it/ /fr/ /es/` |
@@ -115,7 +115,7 @@ frontend/
 | Flask dev port | **9502** |
 | Flask prod port | **9500** |
 | Nuxt→Flask SSR URL (env) | `NUXT_FLASK_URL` (server-only, runtimeConfig.flaskUrl) |
-| Public API base | `/api` (relative, resolved via nginx prod or Nitro devProxy) |
+| Public API base | `/api` (relative; resolved via Apache `mod_proxy_http` in prod or Nitro `routeRules.proxy` in dev -- NOT `nitro.devProxy` catch-all) |
 | Access cookie | `tdc_access` — HttpOnly, SameSite=Lax, Path=/, 15 min |
 | Refresh cookie | `tdc_refresh` — HttpOnly, SameSite=Strict, Path=/api/auth, 7 days |
 | Default locale | `en` (no prefix); others `/it/`, `/fr/`, `/es/` |
@@ -549,6 +549,120 @@ onBeforeUnmount(() => editor.value?.destroy())
 - **TD-013** — livemagic `--tdc-color-primary: #ef4444` collides with the global `--tdc-color-error: #ef4444`; error badges and primary CTAs render in the same red. Trigger: first Phase 4+ livemagic route with both a primary CTA and an error state.
 
 See playbook §§14, 14.5 for per-location palettes, semantic tokens, and mood philosophy.
+
+---
+
+## PHASE 4 PATTERNS (BFF auth + envelope-aware fetch + pure helpers)
+
+Phase 4 (commit `8fcc73c`) introduced the canonical patterns below. They are
+the TDC defaults for new code -- prefer them over older equivalents in the
+quick-snippets section.
+
+### `useApiFetch<T>` -- envelope-aware Flask fetcher (Phase 4 default)
+
+Wrap Flask responses (`{success: true, data: T}`) so callers see `T` directly.
+Resolves baseURL via the SSR/client split: SSR uses `runtimeConfig.flaskUrl`
+(loopback, bypassing Apache), client uses `''` (relative -- proxied by
+`routeRules.proxy` in dev or Apache in prod). Throws loudly on SSR if
+`NUXT_FLASK_URL` is empty (TD-014 documents the deployment requirement).
+
+```typescript
+// app/composables/useApiFetch.ts (sketch)
+export function useApiFetch<T>(path: string, opts?: UseFetchOptions<{success: true; data: T}>) {
+  const cfg = useRuntimeConfig()
+  const isServer = import.meta.server
+  const baseURL = resolveApiBaseURL(isServer, cfg.flaskUrl)
+  const result = useFetch<{success: true; data: T}>(path, { ...opts, baseURL })
+  return { ...result, data: computed(() => unwrapEnvelope(result.data.value)) }
+}
+```
+
+The pure helpers (`unwrapEnvelope`, `resolveApiBaseURL`) live alongside in
+`app/utils/` so vitest can test them without a Nuxt context.
+
+### `useAuth` composable -- SSR cookie forwarding via `useRequestFetch`
+
+When SSR-fetching `/api/auth/me`, the user's `tdc_access` cookie must travel
+along. `useRequestFetch()` returns a `$fetch` whose request inherits the
+incoming request's cookies -- so the BFF `auth-forward` middleware sees them
+and stamps `event.context.flaskHeaders`. Plain `$fetch` would NOT carry
+cookies on SSR.
+
+```typescript
+// app/composables/useAuth.ts (sketch)
+export function useAuth() {
+  const auth = useAuthStore()
+  const fetchWithCookies = useRequestFetch()
+
+  const fetchMe = async () => {
+    const data = await fetchWithCookies<{user: User}>('/api/auth/me')
+    auth.setUser(data.user)
+  }
+  // ... login / logout / refresh
+}
+```
+
+### Three route guards + pure decision helpers
+
+Middleware split: thin Nuxt-aware wrapper integrates auto-imports;
+pure helper holds the decision logic (testable in isolation per the
+"pure-helper extraction" pattern).
+
+- `app/middleware/auth.ts` <-> `decideAuthOutcome` + `buildLoginRedirect`
+- `app/middleware/admin.ts` <-> `decideAdminOutcome`
+- `app/middleware/staff.ts` <-> `decideStaffOutcome`
+
+The factory `buildAuthOps(deps)` lets `useAuth` integrate the BFF endpoints
+without hard-coding `$fetch` -- Tests inject a mock fetcher, prod injects
+the real one. See `app/utils/auth-helpers.ts` (or whichever filename the
+phase landed under).
+
+### BFF handlers (Nitro server routes)
+
+| Handler | Path | Behavior |
+|---|---|---|
+| `server/api/auth/login.post.ts` | `POST /api/auth/login` | zod-validate body, call Flask, set `tdc_access` (Lax) + `tdc_refresh` (Strict, Path=/api/auth), return `{ user }` |
+| `server/api/auth/logout.post.ts` | `POST /api/auth/logout` | Forward to Flask in try/catch, ALWAYS clear both cookies on the way out |
+| `server/api/auth/refresh.post.ts` | `POST /api/auth/refresh` | Read `tdc_refresh` cookie, call Flask with `Authorization: Bearer <refresh>`, ROTATE both cookies |
+| `server/api/auth/me.get.ts` | `GET /api/auth/me` | Gate on `event.context.flaskHeaders` defined; call Flask; return unwrapped user |
+| `server/api/revalidate.post.ts` | `POST /api/revalidate` | Admin-gated. Path validation (no `..`, no `//`, max 500 chars). Clears Nitro cache key `cache:nitro:routes:_:<escapedPathname>.<hash>.json` |
+
+### `flaskFetch` resilient pattern (Phase 3 TD-009 + Phase 4 extension)
+
+`server/utils/flask-client.ts` reads `$fetch` and `useRuntimeConfig` through
+a stub-first / module-fallback pattern so unit tests can stub via
+`globalThis` without Nitro having to expose those names on the global. Phase
+4 extended the runtime-config fallback to try `nitropack/runtime` before
+throwing. This is the canonical resilient pattern -- mirror it in any new
+server util that consumes Nuxt auto-imports.
+
+### `routeRules.proxy` for dev Flask routing (NOT `nitro.devProxy`)
+
+Phase 4 phase-end fix: a top-level `nitro.devProxy['/api']` catch-all
+intercepts `/api/auth/**` and `/api/revalidate` BEFORE Nitro's own handlers,
+breaking the BFF. The correct shape is per-route:
+
+```typescript
+// nuxt.config.ts
+routeRules: {
+  // BFF stays in Nitro
+  '/api/auth/**':    { /* default Nitro handling */ },
+  '/api/revalidate': { /* default Nitro handling */ },
+  // Everything else goes to Flask
+  '/api/**': { proxy: `${process.env.NUXT_FLASK_URL ?? 'http://localhost:9502'}/api/**` },
+}
+```
+
+In prod, Apache `mod_proxy_http` does the same job at the vhost layer (see
+Phase 6 deliverables).
+
+### Pure-helper extraction -- TDC convention
+
+When wrapping Nuxt auto-imports for testability, extract pure decision logic
+into testable functions; the thin wrapper integrates them. See the new
+tdc-testing skill for the full rationale and examples (`decideAuthOutcome`,
+`decideAdminOutcome`, `decideStaffOutcome`, `buildLoginRedirect`,
+`unwrapEnvelope`, `resolveApiBaseURL`, `buildAuthOps`).
 
 ---
 

@@ -45,28 +45,6 @@ buffer for deferred work.
 - **Close when:** `zod@^4` is in `frontend/package.json` and all form
   schemas still pass tests.
 
-### 🟢 TD-004 · Legacy `@studio-freight/lenis` references in 3 files
-
-- **Source:** Task 1.4 (commit 2091253, 2026-04-23)
-- **Issue:** The Lenis package was renamed from `@studio-freight/lenis`
-  to `lenis`. We updated `CLAUDE.md`, the spec, the plan, and the
-  playbook. Three non-authoritative files still reference the old name:
-  - `docs/plans/pdp-v2.md` (historical document — intentionally not
-    updated per "v2 stays as historical reference")
-  - `.claude/skills/tdc-frontend/SKILL.md` (old Vue+Vite skill,
-    scheduled for full rewrite in Phase 5)
-  - `.claude/skills/tdc-testing/SKILL.md` (testing skill, scheduled for
-    review in Phase 5)
-- **Why it's open:** `pdp-v2.md` is historical by design (do not edit);
-  the two skill files are scheduled for a broader rewrite that will
-  naturally incorporate the fix.
-- **Impact:** low. These files are not consumed by subagents during
-  Phase 1-4 implementation. Cosmetic/doc-accuracy only.
-- **Resolution trigger:** Phase 5 skill rewrite. `pdp-v2.md` stays as
-  historical (intentional — close as WONTFIX once Phase 5 completes).
-- **Close when:** `grep -rn '@studio-freight/lenis'
-  .claude/skills/` returns nothing.
-
 ### 🟢 TD-008 · 2 location palettes missing from `main.css`
 
 - **Source:** Task 2.3 (uncommitted in working tree, 2026-04-23)
@@ -302,6 +280,33 @@ buffer for deferred work.
 ---
 
 ## Closed items
+
+### 🟢 TD-004 · Legacy `@studio-freight/lenis` references in 3 files
+
+- **Source:** Task 1.4 (commit 2091253, 2026-04-23)
+- **Issue:** The Lenis package was renamed from `@studio-freight/lenis`
+  to `lenis`. We updated `CLAUDE.md`, the spec, the plan, and the
+  playbook. Three non-authoritative files still referenced the old name:
+  - `docs/plans/pdp-v2.md` (historical document — intentionally not
+    updated per "v2 stays as historical reference")
+  - `.claude/skills/tdc-frontend/SKILL.md` (old Vue+Vite skill,
+    scheduled for full rewrite in Phase 5)
+  - `.claude/skills/tdc-testing/SKILL.md` (testing skill, scheduled for
+    review in Phase 5)
+- **Why it was open:** `pdp-v2.md` is historical by design (do not edit);
+  the two skill files were scheduled for a broader rewrite that would
+  naturally incorporate the fix.
+- **Resolution trigger fired:** Phase 5 skill rewrite (2026-04-25).
+- **Closed:** 2026-04-25 · Phase 5 atomic commit `<phase-5-commit>` —
+  `.claude/skills/tdc-frontend/SKILL.md` rewritten end-to-end for the
+  Nuxt 4 stack; `.claude/skills/tdc-testing/SKILL.md` rewritten for
+  vitest + `@nuxt/test-utils` + happy-dom (frontend) and pytest with
+  real-MySQL fixtures (backend). `pdp-v2.md` left as-is (historical /
+  WONTFIX, per the original entry's note). Verification:
+  `grep -rn '@studio-freight/lenis' .claude/skills/` returns only one
+  intentional "NOT `@studio-freight/lenis`" warning line in
+  `tdc-frontend/SKILL.md` (no usages, no imports). All real usages
+  removed.
 
 ### 🟡 TD-009 · `flask-client.ts` uses globalThis-only pattern — prod Nitro safety unverified
 

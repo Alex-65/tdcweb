@@ -186,10 +186,10 @@ The feature list is unchanged from v2 §11. The implementation phasing is re-cad
 |---|---|---|
 | **1** | Nuxt scaffold + Nuxt modules + runtime / test deps | ✅ Complete (commits `8be146c`, `0cb13ce`, `2091253`, `3b6aa99`, `dbebfc4`) |
 | **2** | Core configuration + BFF plumbing + theme substrate + test harness | ✅ Complete (commit `a9d20d2`) |
-| **3** | Port the public-facing Vue surface to Nuxt: app.vue + layout + error page + AppHeader + AppFooter + 3 public pages (home SSG, locations SSG, events ISR) + 4 composables (useApi, useScrollAnimation, useSmoothScroll, useLocationTheme) + 3 Pinia stores (auth/locale/ui) + 4 i18n locale JSON files (EN/IT/FR/ES) | ✅ Complete (this commit) |
-| **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | 📋 Next |
-| **5** | Docs + agent/skill updates for Nuxt 4 (some already done as prep work); finalize `pdp-v3.md` as source of truth | 🟡 In progress (this doc counts) |
-| **6** | Apache vhost (`mod_proxy_http`) + systemd production config + deploy workflow | 📋 Planned |
+| **3** | Port the public-facing Vue surface to Nuxt: app.vue + layout + error page + AppHeader + AppFooter + 3 public pages (home SSG, locations SSG, events ISR) + 4 composables (useApi, useScrollAnimation, useSmoothScroll, useLocationTheme) + 3 Pinia stores (auth/locale/ui) + 4 i18n locale JSON files (EN/IT/FR/ES) | ✅ Complete (commit `724d5f1`) |
+| **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | ✅ Complete (commit `8fcc73c`) -- BFF auth + backend buildout (4B parallel) |
+| **5** | Docs + agent/skill updates for Nuxt 4 (some already done as prep work); finalize `pdp-v3.md` as source of truth | ✅ Complete (this commit) |
+| **6** | Apache vhost (`mod_proxy_http`) + systemd production config + deploy workflow | 📋 Next |
 | **7** | Phase-end smoke / E2E / Core Web Vitals verification | 📋 Planned |
 
 ### Phase 3 highlights (2026-04-24)
@@ -219,6 +219,85 @@ sub-tasks (3.2b, 3.3b, 3.5b, 3.6b) plus 2 typecheck-batch passes and
   `<CommonAppHeader />`) while keeping the `common/` subdirectory.
 - 21/21 unit tests + 11/11 Playwright E2E (1920x1080) PASS; prod build
   + SSR bundle audit confirm `gsap`/`lenis` absent from server chunks.
+
+### Phase 4 highlights (2026-04-25)
+
+Phase 4 wired the end-to-end auth chain (BFF + composable + guards) and
+ran in parallel with Phase 4B, which built the Flask backend out from
+the MVP `/api/health` stub to a production-shaped surface (User model,
+JWT, auth decorators, three blueprints, full pytest suite on real
+MySQL). Closing commit: `8fcc73c`.
+
+- **BFF auth chain**: `server/api/auth/login.post.ts`,
+  `logout.post.ts`, `refresh.post.ts`, `me.get.ts` -- HttpOnly cookies
+  (`tdc_access` 15 min Lax / `tdc_refresh` 7 d Strict Path=/api/auth,
+  rotated on use); zod-validated inputs; envelope-aware Flask calls.
+- **`/api/revalidate`**: admin-gated on-demand SSR cache invalidation
+  with hardened path validation (no `..`, no `//`, max 500 chars) and
+  the correct Nitro cache-key format
+  `cache:nitro:routes:_:<escapedPathname>.<hash>.json`.
+- **`useApiFetch<T>` envelope adapter**: unwraps Flask
+  `{success: true, data: T}` to `T` via `unwrapEnvelope`; SSR baseURL
+  split via `resolveApiBaseURL(isServer, flaskUrl)` (loud-fail when
+  `NUXT_FLASK_URL` missing in SSR -- TD-014).
+- **`useAuth` composable + `auth`/`admin`/`staff` middleware**: pure-
+  helper extraction (`buildAuthOps`, `decideAuthOutcome`,
+  `decideAdminOutcome`, `decideStaffOutcome`, `buildLoginRedirect`)
+  separates testable decision logic from Nuxt auto-import wrapping.
+  SSR cookie forwarding handled via `useRequestFetch()`.
+- **Phase 4B parallel**: `User` model (bcrypt cost 12), JWT helpers
+  (PyJWT 2.10+ str-sub canonicalization), `@jwt_required` /
+  `@role_required` decorators, three blueprints (auth / locations /
+  events) -- 46 pytest cases on real MySQL `tdcweb_test` schema, no
+  mocks per CLAUDE.md.
+- **Phase-end fixes (working tree, controller-applied)**:
+  - `nitro.devProxy` catch-all replaced by `routeRules.proxy` for
+    Flask routing in dev -- precedence ordering matters; `routeRules`
+    correctly defers `/api/auth/**` and `/api/revalidate` to Nitro.
+  - `ProductionConfig` made strict: `SECRET_KEY` and `JWT_SECRET_KEY`
+    raise on missing env (no placeholder fallback in prod path).
+  - `flaskFetch` made resilient: `nitropack/runtime` fallback for
+    `useRuntimeConfig` plus stub-first dispatch (matches the
+    `auth-forward.ts` / `cookies.ts` resilient pattern from Phase 3).
+- **TECH_DEBT opened**: TD-014 (`NUXT_FLASK_URL` deployment runbook,
+  Phase 6 trigger), TD-015 (login open-redirect validator, login-page
+  task trigger), TD-016 (BFF handler unit tests for logout/refresh/me),
+  TD-017 (`events.location_id` NULL coercion).
+- **Tests**: 73 vitest + 46 pytest = 119 cases total. Full E2E auth
+  chain (login -> me -> revalidate -> logout) verified via curl with
+  Flask + MySQL + Apache dev vhost.
+
+### Phase 5 highlights (2026-04-25)
+
+Phase 5 was scoped to documentation + skill catch-up. Three of four
+deliverables (5.1, 5.2, 5.3) had been pre-shipped as prep work during
+earlier phases; Phase 5 closes the loop on the remainder so all
+authoritative docs and skills now describe the Nuxt 4 stack
+consistently.
+
+- **TD-004 closed**: legacy `@studio-freight/lenis` references removed
+  from both skill files. `pdp-v2.md` retained as historical (intentional
+  WONTFIX per the original entry).
+- **`pdp-v3.md` synced**: roadmap reflects Phase 4 close (`8fcc73c`)
+  and Phase 5 close; Phase 4 highlights section codifies the BFF /
+  Phase 4B / phase-end-fixes story.
+- **`.claude/skills/tdc-frontend/SKILL.md` rewritten**: Vue 3 SPA
+  contents replaced by Nuxt 4 -- `app/` layer file structure,
+  `useApiFetch` / `useFetch` / `$fetch` / `useRequestFetch` decision
+  table, the seven SSR client-only rules, pure-helper extraction
+  pattern, location theming via `useHead({ bodyAttrs })`,
+  vee-validate + zod + `useSeoMeta` snippets. Down from 1636 lines.
+- **`.claude/skills/tdc-testing/SKILL.md` rewritten**: vitest +
+  `@nuxt/test-utils` + happy-dom (frontend) and pytest with
+  real-MySQL fixtures (backend) replace the pre-Nuxt content. Encodes
+  the bare-auto-import gotcha (server vs app code), the pure-helper
+  extraction-over-mockNuxtImport rule, the no-DB-mock convention, and
+  the conftest fixture catalogue (`fresh_user`, `staff_user`,
+  `admin_user`, `make_location`, `make_event`). Down from 1539 lines.
+- **`tdc-frontend-expert.md` audited**: see audit verdict in commit
+  log; Phase 4 patterns (`useApiFetch`, `useAuth`, route guards, BFF
+  handlers, `flaskFetch`, `routeRules.proxy`, pure-helper extraction)
+  all confirmed present or added as a "Phase 4 patterns" section.
 
 Feature areas (each will become one or more spec + plan pairs under `docs/superpowers/`):
 - Landing page with Apple-style scroll storytelling (GSAP + ScrollTrigger + Lenis)

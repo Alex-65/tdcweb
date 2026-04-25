@@ -5,6 +5,60 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 5 (Documentation + skill catch-up)] -- 2026-04-25
+
+Phase 5 was scoped to documentation and skill maintenance. No application
+code changed in this commit. Three of the four originally-planned
+deliverables (5.1, 5.2, 5.3) had been pre-shipped during earlier phases;
+Phase 5 closes the loop on the remainder so all authoritative TDC docs
+and skills now describe the Nuxt 4 stack consistently.
+
+### Changed
+
+- `docs/plans/pdp-v3.md` -- Feature Roadmap synced: Phase 4 marked
+  complete (commit `8fcc73c`, with Phase 4B parallel note); Phase 5
+  marked complete (this commit); Phase 6 promoted to Next. Phase 4
+  highlights section added (BFF auth chain, `useApiFetch`, `useAuth`,
+  three route guards with pure helpers, Phase 4B parallel backend
+  buildout, phase-end fixes for `routeRules.proxy` / `ProductionConfig`
+  strict env / `flaskFetch` resilient pattern, opened TECH_DEBT
+  TD-014 / TD-015 / TD-016 / TD-017, 119 total test cases). Phase 5
+  highlights section added.
+- `.claude/skills/tdc-frontend/SKILL.md` -- rewritten end-to-end for
+  Nuxt 4: `app/` layer file structure, `useApiFetch` /
+  `useFetch` / `$fetch` / `useRequestFetch` decision table, the seven
+  SSR client-only rules, pure-helper extraction pattern, location
+  theming via `useHead({ bodyAttrs })`, vee-validate + zod, BFF
+  handler patterns, `routeRules.proxy` (NOT `nitro.devProxy`) for dev
+  Flask routing. Down from 1636 to ~620 lines.
+- `.claude/skills/tdc-testing/SKILL.md` -- rewritten for the current
+  stack: vitest + `@nuxt/test-utils` + happy-dom (frontend) and
+  pytest 9.x with real-MySQL fixtures (backend, no DB mocks per
+  CLAUDE.md). Encodes bare-auto-import gotcha (server vs app code),
+  the pure-helper extraction-over-`mockNuxtImport` rule, conftest
+  fixture catalogue (`fresh_user`, `staff_user`, `admin_user`,
+  `make_location`, `make_event` with auto-cleanup), Playwright at
+  1920x1080. Down from 1539 to ~580 lines.
+- `.claude/agents/tdc-frontend-expert.md` -- audit-only edits: added a
+  "Phase 4 Patterns" section covering `useApiFetch` envelope adapter,
+  `useAuth` with `useRequestFetch` for SSR cookies, three route guards
+  with pure helpers, BFF handler catalogue, `flaskFetch` resilient
+  pattern, `routeRules.proxy` vs `nitro.devProxy` precedence rule, and
+  the pure-helper extraction TDC convention. Inline drift fixes:
+  Tailwind reference corrected to `@tailwindcss/vite` (was
+  `@nuxtjs/tailwindcss`); prod proxy reference corrected to Apache
+  `mod_proxy_http` (was `nginx`).
+
+### Tech Debt
+
+- **TD-004 closed**: legacy `@studio-freight/lenis` references removed
+  from both skill files. Verification:
+  `grep -rn '@studio-freight/lenis' .claude/skills/` returns only one
+  intentional "NOT `@studio-freight/lenis`" warning line in the
+  rewritten `tdc-frontend/SKILL.md` (no usages, no imports).
+  `pdp-v2.md` retained as-is (historical / WONTFIX per the original
+  entry).
+
 ## [Phase 4 (Nuxt BFF auth) + 4B (Backend buildout)] -- 2026-04-25
 
 Phase 4 wires end-to-end authentication: the Nuxt BFF (login / logout /
