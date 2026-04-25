@@ -1,0 +1,69 @@
+[Unit]
+# TDC Nuxt 4 SSR frontend (Phase 6).
+#
+# Runs the production node bundle emitted by `npm run build` at
+# /data1/tdcweb/frontend/.output/server/index.mjs on 127.0.0.1:9501.
+# Apache (see /data1/tdcweb/apache/thedreamerscave-prod.conf) reverse-
+# proxies / and /api/auth/** + /api/revalidate to this port.
+#
+# Required env vars (set in /etc/tdcweb/frontend.env -- NOT committed):
+#   NUXT_FLASK_URL          http://127.0.0.1:9500
+#   NUXT_COOKIE_SECRET      <random 32+ chars; rotates invalidate refresh tokens>
+#   NUXT_PUBLIC_SITE_URL    https://thedreamerscave.club
+#   NUXT_PUBLIC_API_BASE    /api
+#
+# Optional:
+#   NITRO_PRESET            node-server  (set via .env or ExecStartPre if needed)
+#
+# TD-014 closure: this unit's EnvironmentFile + the docs/deployment/
+# production.md runbook codify the SSR-side NUXT_FLASK_URL requirement.
+# Without it, the resolveApiBaseURL helper in frontend/app/composables/
+# useApiFetch.ts throws at first SSR request.
+
+Description=TDC Nuxt 4 frontend (SSR/SSG/ISR on :9501)
+Documentation=file:///data1/tdcweb/docs/deployment/production.md
+After=network-online.target tdcweb-backend.service
+Wants=network-online.target
+Requires=tdcweb-backend.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/data1/tdcweb/frontend
+
+# Production env file -- contains NUXT_FLASK_URL, NUXT_COOKIE_SECRET,
+# NUXT_PUBLIC_SITE_URL. NOT in the repo. Owned by root, mode 0640,
+# group www-data so the systemd service can read it.
+EnvironmentFile=/etc/tdcweb/frontend.env
+
+# Hard-coded (not user-tunable) bindings.
+Environment=NODE_ENV=production
+Environment=PORT=9501
+Environment=HOST=127.0.0.1
+
+# Use the system node from /usr/bin (or pin via update-alternatives).
+ExecStart=/usr/bin/node /data1/tdcweb/frontend/.output/server/index.mjs
+
+# Restart policy: bounce on crash, not on graceful shutdown.
+Restart=on-failure
+RestartSec=5
+
+# Resource limits (sane defaults; tune after first prod traffic measurement).
+LimitNOFILE=65536
+TasksMax=2048
+
+# Logging via journald.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tdcweb-frontend
+
+# Hardening.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/data1/tdcweb/frontend/.output
+
+[Install]
+WantedBy=multi-user.target

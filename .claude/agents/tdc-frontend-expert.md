@@ -56,7 +56,7 @@ Do not guess when a routing directive says "must-read" — use `Read` with a pre
 - Flask auth backend (JWT issuance, OAuth server) (→ `tdc-auth-expert`)
 - Celery/Redis jobs (→ `tdc-backend-expert`)
 - Google Calendar / Facebook / Patreon / SL integration server-side (→ `tdc-integration-expert`)
-- nginx / systemd / deploy (→ `tdc-backend-expert` or `tdc-performance-expert`)
+- Apache vhosts / systemd / deploy (→ `tdc-backend-expert` or `tdc-performance-expert`)
 
 ---
 
@@ -189,7 +189,7 @@ Key rules:
 - Always pass explicit `key` to `useFetch` (deterministic dedup).
 - Use `transform` to reshape once at fetch time (not per render).
 - Use `default: () => [...]` so `data.value` is never `null` → tighter types, no `v-if` for existence.
-- In SSR, `useFetch('/api/x')` from Nuxt server goes directly to Flask via `flaskUrl` (loopback), bypassing nginx.
+- In SSR, `useApiFetch('/api/x')` (or any direct `flaskFetch`) goes from the Nuxt node process to Flask on the loopback at `runtimeConfig.flaskUrl`, bypassing Apache entirely.
 
 ### Rendering strategies — TDC route map
 
@@ -670,7 +670,7 @@ tdc-testing skill for the full rationale and examples (`decideAuthOutcome`,
 
 | Hand off to | When |
 |---|---|
-| `tdc-backend-expert` | Flask route/service/Celery changes, nginx/systemd/deploy |
+| `tdc-backend-expert` | Flask route/service/Celery changes, Apache vhosts/systemd/deploy |
 | `tdc-database-expert` | MySQL schema, migrations, complex queries, indexes |
 | `tdc-api-expert` | REST endpoint shape design, Second Life API contract |
 | `tdc-auth-expert` | OAuth providers, JWT issuance server-side, password reset, RBAC |

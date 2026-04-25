@@ -210,17 +210,6 @@ buffer for deferred work.
 
 ---
 
-### 🟡 TD-014 · `NUXT_FLASK_URL` SSR-side requirement not yet documented in deployment runbook
-
-- **Source:** Task 4B.4 (working tree, 2026-04-25). Code review HIGH/MEDIUM fix round.
-- **Issue:** `frontend/app/composables/useApiFetch.ts` introduced `resolveApiBaseURL(isServer, flaskUrl)` which throws on SSR if `runtimeConfig.flaskUrl` is empty/undefined. This is intentional (loud-fail beats silent 404 for every page that uses the composable), but the operational requirement -- "the SSR Node process MUST have `NUXT_FLASK_URL` set in its environment" -- is not yet codified in any deployment runbook. `nuxt.config.ts` has a dev fallback `'http://localhost:9502'`, so dev never trips; prod will trip on the first SSR request if the systemd unit / Apache reverse-proxy host file doesn't export the var.
-- **Why it's open:** Phase 6 owns deployment (Apache vhosts, systemd units, prod env files). Documenting this in `docs/deployment/` ahead of Phase 6 risks creating a stub doc that drifts; folding it into the Phase 6 deliverable is the clean fit. Rule 18 fix-now-if-possible was honored on the code side (the throw exists); the runbook side is the genuinely deferred portion.
-- **Impact:** medium-pending. Zero impact today (dev has fallback). Materializes the moment Phase 6 lands prod SSR -- without the env var, every public page (locations, events, artists, blog, home) fails on first request with the explicit error. The throw makes diagnosis trivial (no silent 404s) but the runbook should pre-empt the misconfig.
-- **Resolution trigger:** Phase 6 deployment runbook drafting. Specifically the systemd unit definition for the Nuxt SSR service and the Apache vhost env-var section.
-- **Close when:** `docs/deployment/` (or equivalent Phase 6 runbook) contains an explicit "Required SSR environment variables" section listing `NUXT_FLASK_URL` (with the prod target, e.g. `http://localhost:9500`), `NUXT_COOKIE_SECRET`, `NUXT_PUBLIC_SITE_URL`, `NUXT_PUBLIC_API_BASE`, AND the prod `nuxt.config.ts` (or the systemd unit) is verified to read them at boot. A smoke test "kill `NUXT_FLASK_URL` then hit `/locations`, verify the loud error" closes the loop.
-
----
-
 ### 🟡 TD-015 · Login page must validate `?redirect=` param against open-redirect
 
 - **Source:** Task 4.4 (working tree, 2026-04-25). Code review LOW finding flagged for follow-up at login-page implementation time.
@@ -280,6 +269,16 @@ buffer for deferred work.
 ---
 
 ## Closed items
+
+### 🟡 TD-014 · `NUXT_FLASK_URL` SSR-side requirement not yet documented in deployment runbook
+
+- **Source:** Task 4B.4 (working tree, 2026-04-25). Code review HIGH/MEDIUM fix round.
+- **Issue:** `frontend/app/composables/useApiFetch.ts` introduced `resolveApiBaseURL(isServer, flaskUrl)` which throws on SSR if `runtimeConfig.flaskUrl` is empty/undefined. This is intentional (loud-fail beats silent 404 for every page that uses the composable), but the operational requirement -- "the SSR Node process MUST have `NUXT_FLASK_URL` set in its environment" -- was not codified in any deployment runbook.
+- **Why it was open:** Phase 6 owns deployment (Apache vhosts, systemd units, prod env files). Documenting in `docs/deployment/` ahead of Phase 6 would have produced a stub doc; folding it into the Phase 6 deliverable was the clean fit.
+- **Resolution trigger fired:** Phase 6 deployment runbook authored (2026-04-25).
+- **Closed:** 2026-04-25 · Phase 6 atomic commit `<phase-6-commit>` -- `docs/deployment/production.md` codifies the SSR env-var contract in section 3.2 (`/etc/tdcweb/frontend.env`) listing `NUXT_FLASK_URL`, `NUXT_COOKIE_SECRET`, `NUXT_PUBLIC_SITE_URL`, `NUXT_PUBLIC_API_BASE`. The systemd unit at `deploy/systemd/tdcweb-frontend.service` references the env file via `EnvironmentFile=/etc/tdcweb/frontend.env`. Section 9 "Known gotchas" calls out the loud-fail behavior so on-call engineers can diagnose a misconfig in seconds.
+
+---
 
 ### 🟢 TD-004 · Legacy `@studio-freight/lenis` references in 3 files
 

@@ -5,6 +5,73 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 6 (Production deployment artifacts)] -- 2026-04-25
+
+Phase 6 lands the production deployment plumbing for the Nuxt 4 + Flask 3
+stack on mioh1 (Apache + systemd). No application code changed; Phase 6
+is a configuration + documentation phase. Production deploy itself is
+operator-driven and follows the runbook authored here.
+
+### Added
+
+- `apache/thedreamerscave-prod.conf` -- production Apache vhost adapted
+  from the dev vhost (`dev-thedreamerscave.conf`) and the plan's nginx
+  template. TLS via unified-cert (16-domain SAN, auto-renewed). Routing
+  split mirrors the dev setup: `/api/auth/**` and `/api/revalidate` to
+  Nuxt :9501 (BFF, sets HttpOnly cookies); other `/api/**` to Flask
+  :9500; `/_nuxt/` and `/favicon.ico` served as static disk; `/trullo`
+  preserved as legacy passthrough; everything else to Nuxt SSR.
+- `deploy/systemd/tdcweb-frontend.service` -- Nuxt SSR node systemd
+  unit. Loads required env vars from `/etc/tdcweb/frontend.env`
+  (NUXT_FLASK_URL, NUXT_COOKIE_SECRET, NUXT_PUBLIC_SITE_URL,
+  NUXT_PUBLIC_API_BASE). Runs as `www-data`, port `127.0.0.1:9501`,
+  hardened (NoNewPrivileges, ProtectSystem=strict, ReadWritePaths
+  scoped to `.output/`).
+- `deploy/systemd/tdcweb-backend.service` -- gunicorn-hosted Flask
+  backend systemd unit. Loads `/etc/tdcweb/backend.env` with required
+  SECRET_KEY + JWT_SECRET_KEY (ProductionConfig fails loud if missing
+  per Phase 4 holistic-review HIGH fix). Runs as `www-data`, port
+  `127.0.0.1:9500`, 4 workers x 8 threads.
+- `docs/deployment/production.md` -- end-to-end production runbook:
+  topology, prerequisites, secret provisioning, first-time install
+  (code + venv + npm build + systemd + Apache vhost swap + smoke
+  tests), re-deploy procedure, rollback, observability, cert renewal,
+  known gotchas. Sections 3.1 + 3.2 codify the SSR env-var contract.
+
+### Changed
+
+- `.claude/agents/tdc-frontend-expert.md` -- three lingering "nginx"
+  references (lines 59, 192, 673) replaced with Apache references to
+  match production reality. Hand-off table and SSR-loopback paragraph
+  now match `pdp-v3.md` and CLAUDE.md.
+- `.claude/skills/tdc-docs/SKILL.md` -- "Vue.js 3 SPA" stack drift
+  (line 42, 65) updated to the Nuxt 4 stack: app/ layer directory tree,
+  Nitro server BFF, Tailwind v4 CSS-first, vee-validate+zod,
+  `@nuxtjs/i18n` and `@nuxtjs/seo`. Aligns with the Phase 5 skill
+  rewrites and Phase 4 patterns.
+- `docs/TECH_DEBT.md` -- TD-014 (NUXT_FLASK_URL deployment runbook)
+  moved to Closed items. Closing artifact: section 3.2 of
+  `docs/deployment/production.md` plus the systemd unit
+  `EnvironmentFile=` directive.
+
+### Verification
+
+- vitest 73/73 (no code changed; sanity rerun)
+- pytest 46/46 (no code changed; sanity rerun)
+- `grep nginx .claude/agents/tdc-frontend-expert.md` -> empty
+- `grep 'Vue.js 3' .claude/skills/tdc-docs/SKILL.md` -> empty
+- Apache `apache2ctl -t` validation deferred to deploy host (sudo not
+  available in dev session)
+
+### Deferred / out-of-scope
+
+- Actual production deployment (operator-driven, runbook is the
+  contract). Phase 7 will provide post-deploy smoke + Core Web Vitals
+  verification.
+- Strict CSP policy: Phase 6 vhost ships permissive CSP (Nuxt emits
+  some inline scripts in payload). A strict policy lands in a future
+  hardening pass once the inline-script surface is measured.
+
 ## [Phase 5 (Documentation + skill catch-up)] -- 2026-04-25
 
 Phase 5 was scoped to documentation and skill maintenance. No application
