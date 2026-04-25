@@ -189,8 +189,8 @@ The feature list is unchanged from v2 §11. The implementation phasing is re-cad
 | **3** | Port the public-facing Vue surface to Nuxt: app.vue + layout + error page + AppHeader + AppFooter + 3 public pages (home SSG, locations SSG, events ISR) + 4 composables (useApi, useScrollAnimation, useSmoothScroll, useLocationTheme) + 3 Pinia stores (auth/locale/ui) + 4 i18n locale JSON files (EN/IT/FR/ES) | ✅ Complete (commit `724d5f1`) |
 | **4** | Server-side auth flows (login/logout/refresh/me) + SPA auth-gated routes (dashboard, profile, favorites, notifications) | ✅ Complete (commit `8fcc73c`) -- BFF auth + backend buildout (4B parallel) |
 | **5** | Docs + agent/skill updates for Nuxt 4 (some already done as prep work); finalize `pdp-v3.md` as source of truth | ✅ Complete (this commit) |
-| **6** | Apache vhost (`mod_proxy_http`) + systemd production config + deploy workflow | 📋 Next |
-| **7** | Phase-end smoke / E2E / Core Web Vitals verification | 📋 Planned |
+| **6** | Apache vhost (`mod_proxy_http`) + systemd production config + deploy workflow | ✅ Complete (commit `62e2f34`) -- TD-014 closed |
+| **7** | Phase-end smoke / E2E / Core Web Vitals verification | ✅ Complete (this commit) |
 
 ### Phase 3 highlights (2026-04-24)
 
@@ -298,6 +298,70 @@ consistently.
   log; Phase 4 patterns (`useApiFetch`, `useAuth`, route guards, BFF
   handlers, `flaskFetch`, `routeRules.proxy`, pure-helper extraction)
   all confirmed present or added as a "Phase 4 patterns" section.
+
+### Phase 6 highlights (2026-04-25)
+
+Phase 6 lands the production deployment artifacts. Adapted from the
+plan's nginx template to Apache (`mod_proxy_http`) per CLAUDE.md and
+user direction; vhost mirrors the dev vhost (`dev-thedreamerscave.conf`)
+that already proves the routing split works in practice.
+
+- **`apache/thedreamerscave-prod.conf`**: Nuxt-aware production vhost.
+  TLS via `unified-cert` (16-domain SAN). Routing split: `/api/auth/**`
+  and `/api/revalidate` to Nuxt :9501 (BFF, sets HttpOnly cookies);
+  other `/api/**` to Flask :9500; `/_nuxt/`, `/favicon.ico` static
+  disk; `/trullo` legacy passthrough; everything else to Nuxt SSR.
+- **`deploy/systemd/tdcweb-frontend.service`**: node SSR unit.
+  EnvironmentFile `/etc/tdcweb/frontend.env` (NUXT_FLASK_URL,
+  NUXT_COOKIE_SECRET, NUXT_PUBLIC_SITE_URL). Hardened with
+  `NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths` scoped
+  to `.output/`.
+- **`deploy/systemd/tdcweb-backend.service`**: gunicorn unit.
+  EnvironmentFile `/etc/tdcweb/backend.env` with required `SECRET_KEY`
+  and `JWT_SECRET_KEY` (ProductionConfig fails loud if missing per
+  Phase 4 holistic-review HIGH fix). 4 workers x 8 threads.
+- **`docs/deployment/production.md`**: end-to-end runbook (topology,
+  prerequisites, secret provisioning, first-time install, re-deploy,
+  rollback, observability, cert renewal, known gotchas).
+- **TD-014 closed**: NUXT_FLASK_URL deployment runbook gap. Closing
+  artifact: runbook sections 3.2 + 9.
+- **Phase 5 carry-over docs drift fixed**: 3 nginx mentions in
+  `tdc-frontend-expert.md` and "Vue.js 3 SPA" in `tdc-docs SKILL.md`.
+
+### Phase 7 highlights (2026-04-25) -- migration DoD
+
+Phase 7 verified the Definition of Done for the Nuxt 4 migration. No
+application code changed; this phase is observational with a final
+production-build smoke.
+
+- **7.1 / 7.2 SSR + SPA segregation**: dev landing renders "You Can
+  See The Music" (3 occurrences); `/dashboard` (`ssr: false`) is empty
+  SPA shell with no auth content in the HTML payload.
+- **7.3 BFF login round-trip**: Nitro returns 401 on bad creds with
+  CSP / X-Frame-Options security headers (Nitro origin), confirming
+  the BFF chain is hit (not Flask via devProxy bypass). Full happy-
+  path was already verified during Phase 4 end-of-phase smoke
+  (login -> me -> revalidate -> logout chain on real MySQL with
+  cookie rotation).
+- **7.4 production build + node preview**: `npx nuxt build` succeeds
+  with output 48MB (sharp binaries for `linux-x64` bundled by
+  `@nuxt/image`). Node preview on `:9501` (matches systemd unit)
+  serves landing + `/it` Italian motto + `/api/auth/me` BFF +
+  `/sitemap_index.xml` (4 sub-sitemaps). Build artifacts gitignored.
+- **7.5 full unit suite**: vitest 73/73 + pytest 46/46 = 119 cases
+  green (sanity rerun; no code changed).
+- **7.6 i18n**: Italian root `/it` renders with `lang="it-IT"` +
+  "Puoi vedere la musica" (3 occurrences). EN/IT/FR/ES locales all
+  load via `@nuxtjs/i18n` lazy JSON.
+- **7.7 cleanup + handoff**: working tree clean, `.output/` and
+  `.nuxt/` gitignored, all phases marked complete in the roadmap
+  table above. Next steps live below in the Feature Roadmap section.
+
+Migration totals across phases 1-7: see CHANGELOG for the running
+ledger. The Nuxt 4 migration as scoped by this plan is complete;
+feature pages (locations/:slug detail, events/:id, artists, blog,
+auth UI, admin panel) are out of scope for this migration and will
+land as separate spec + plan pairs.
 
 Feature areas (each will become one or more spec + plan pairs under `docs/superpowers/`):
 - Landing page with Apple-style scroll storytelling (GSAP + ScrollTrigger + Lenis)

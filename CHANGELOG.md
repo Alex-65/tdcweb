@@ -5,6 +5,45 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Phase 7 (Migration Definition of Done)] -- 2026-04-25
+
+Phase 7 closes the Nuxt 4 migration. No application code changed; this
+is the observational verification phase culminating in a production
+build + node preview smoke.
+
+### Verified
+
+- **7.1 / 7.2 SSR + SPA segregation**: landing renders "You Can See
+  The Music"; `/dashboard` (`ssr: false`) is empty SPA shell with no
+  auth content in the HTML payload.
+- **7.3 BFF login round-trip**: Nitro returns 401 with full security
+  headers on bad creds, confirming BFF is hit (not Flask via
+  devProxy). Full happy-path verified during Phase 4 end-of-phase
+  smoke (login -> me -> revalidate -> logout chain on real MySQL).
+- **7.4 production build + node preview**: `npx nuxt build` succeeds
+  (48MB output, sharp binaries bundled). Node preview on `:9501`
+  serves landing + `/it` + `/api/auth/me` BFF + `/sitemap_index.xml`
+  (4 sub-sitemaps).
+- **7.5 full unit suite**: vitest 73/73 + pytest 46/46 = 119 cases.
+- **7.6 i18n**: Italian root `/it` renders with `lang="it-IT"` and
+  "Puoi vedere la musica" (3 occurrences).
+- **7.7 cleanup**: working tree clean, `.output/` and `.nuxt/`
+  gitignored, all migration phases marked complete in pdp-v3
+  roadmap.
+
+### Changed
+
+- `docs/plans/pdp-v3.md` -- roadmap marks Phase 6 complete (commit
+  `62e2f34`) and Phase 7 complete (this commit). New Phase 6 + Phase
+  7 highlights sections close the migration story.
+
+### Migration summary (phases 1-7)
+
+The Nuxt 4 migration is complete. Phase scope was the platform port;
+feature pages (location detail, event detail, artists, blog, auth UI,
+admin panel) are out of scope and will land as separate spec + plan
+pairs.
+
 ## [Phase 6 (Production deployment artifacts)] -- 2026-04-25
 
 Phase 6 lands the production deployment plumbing for the Nuxt 4 + Flask 3
