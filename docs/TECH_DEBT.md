@@ -44,6 +44,12 @@ buffer for deferred work.
   `vee-validate` major lands.
 - **Close when:** `zod@^4` is in `frontend/package.json` and all form
   schemas still pass tests.
+- **Audit log:**
+  - 2026-04-26 (post-Phase-7 sweep): `npm view @vee-validate/zod
+    peerDependencies` -> still `{ zod: '^3.24.0' }`. Latest published is
+    still `4.15.1`. No upstream movement since the original entry.
+    Stays open; next audit at next quarterly check or on
+    `@vee-validate/zod` major version bump.
 
 ### 🟢 TD-008 · 2 location palettes missing from `main.css`
 
@@ -221,21 +227,6 @@ buffer for deferred work.
 
 ---
 
-### 🟢 TD-016 · BFF auth handlers (logout/refresh/me) lack direct unit-test coverage
-
-- **Source:** Phase 4 holistic review (working tree, 2026-04-25). MEDIUM forward-looking finding.
-- **Issue:** Three of the four BFF auth handlers ship without dedicated vitest unit specs:
-  - `frontend/server/api/auth/logout.post.ts` -- has try/catch fallback that clears cookies even if the Flask call throws; not asserted.
-  - `frontend/server/api/auth/refresh.post.ts` -- extracts the refresh cookie, calls Flask, rotates cookies; rotation logic not asserted at unit level.
-  - `frontend/server/api/auth/me.get.ts` -- gates on `event.context.flaskHeaders` being defined; the gate is not asserted.
-  Login (`login.post.ts`) does have a test (`tests/unit/login-handler.test.ts`). Indirect coverage exists at two layers: backend pytest exercises Flask `/api/auth/*` end-to-end with real MySQL, and `useAuth.test.ts` mocks the fetcher so the composable's interaction with each route is verified. But the BFF wiring itself (cookie-set/clear sequencing, error fallthrough behavior, header gate) has no dedicated unit assertion.
-- **Why it's open:** Phase 4 phase-end real tests (Playwright E2E for the full login -> me -> refresh -> logout chain) cover this transitively; adding three more handler-level specs at phase end wasn't a blocker for shipping the code. Logging here so the gap is visible if any of those handlers gets touched again.
-- **Impact:** low. A regression in any of the three handlers would surface immediately in E2E. No silent-failure path identified.
-- **Resolution trigger:** first refactor or behavior change to any of the three handlers, OR phase that introduces a new BFF auth concept (registration, password reset). At that point, mirror the `login-handler.test.ts` pattern: typed-globalThis stubs for `flaskFetch`/cookie helpers, assert handler returns expected shape, assert side effects (cookie set/clear) called with correct args.
-- **Close when:** `tests/unit/{logout,refresh,me}-handler.test.ts` exist with at minimum one happy-path + one failure-path assertion each, and total vitest count grew accordingly.
-
----
-
 ### 🟢 TD-017 · `events.location_id` NULL coerced to 0 (type alignment)
 
 - **Source:** Phase 4B.3 + holistic review (working tree, 2026-04-25). LOW finding.
@@ -247,6 +238,10 @@ buffer for deferred work.
 
 ---
 
+---
+
+## Closed items
+
 ### 🟢 TD-005 · Transitive deprecation warnings in npm
 
 - **Source:** Tasks 1.3 and 1.4
@@ -255,20 +250,37 @@ buffer for deferred work.
   - `inflight@1.0.6` (via build tools)
   - `glob@7.2.3` (via build tools)
   - `@koa/router@12.0.2` (via build tools)
-  - `vue-i18n@10.x` (pulled by `@nuxtjs/i18n@10.2.4` — upstream hasn't
-    bumped yet)
-- **Why it's open:** transitive, not actionable from our `package.json`.
-  Requires upstream modules to update their own dependencies.
-- **Impact:** none functional, deprecation warnings in install output.
-- **Resolution trigger:** monitor during module upgrades. When we bump
-  `@nuxtjs/i18n` to a version that uses `vue-i18n@^11`, close that
-  line item.
-- **Close when:** a run of `npm install` in `frontend/` completes with
-  zero deprecation warnings, OR we explicitly WONTFIX with reasoning.
+  - `vue-i18n@10.x` (pulled by `@nuxtjs/i18n@10.2.4` -- upstream hadn't
+    bumped at the time of logging)
+- **Why it was open:** transitive, not actionable from our `package.json`;
+  required upstream modules to update their own dependencies.
+- **Resolution trigger fired:** post-Phase-7 sweep audit (2026-04-26)
+  showed `npm install` completes with zero deprecation warnings. Tree
+  audit confirms: `inflight` no longer installed; `glob` is at 10.5.0 +
+  13.0.6 (both modern, neither deprecated); `@koa/router` no longer
+  installed; `vue-i18n@11.3.2` is the top-level deduped version (only
+  one transitive `vue-i18n@10.0.8` remains via `@intlify/vue-i18n-
+  extensions@8.0.0`, but it is no longer flagged deprecated).
+- **Closed:** 2026-04-26 -- close-when criterion met: `npm install` in
+  `frontend/` completes with zero deprecation warnings. Verified via
+  `npm install 2>&1 | grep -iE "deprecated|warn"` returning only one
+  unrelated config-validation warn from `nuxt-site-config`.
 
----
+### 🟢 TD-016 · BFF auth handlers (logout/refresh/me) lack direct unit-test coverage
 
-## Closed items
+- **Source:** Phase 4 holistic review (working tree, 2026-04-25). MEDIUM forward-looking finding.
+- **Issue:** Three of the four BFF auth handlers shipped without dedicated vitest unit specs:
+  - `frontend/server/api/auth/logout.post.ts` -- try/catch fallback that clears cookies even if the Flask call throws; not asserted.
+  - `frontend/server/api/auth/refresh.post.ts` -- extracts the refresh cookie, calls Flask, rotates cookies; rotation logic not asserted at unit level.
+  - `frontend/server/api/auth/me.get.ts` -- gates on `event.context.flaskHeaders` being defined; the gate not asserted.
+  Login (`login.post.ts`) had `tests/unit/login-handler.test.ts`. Indirect coverage existed at two layers (backend pytest end-to-end with real MySQL; `useAuth.test.ts` mocks the fetcher), but the BFF wiring itself was not directly asserted.
+- **Why it was open:** Phase 4 phase-end real tests (curl-based E2E for the full login -> me -> revalidate -> logout chain) covered this transitively; adding handler-level specs at phase end was not a blocker for shipping.
+- **Resolution trigger fired:** post-Phase-7 tech-debt sweep, 2026-04-26.
+- **Closed:** 2026-04-26 -- three new test files created mirroring the `login-handler.test.ts` pattern (typed-globalThis stubs, NEVER `as any`, install before handler import):
+  - `frontend/tests/unit/logout-handler.test.ts` (3 cases: happy-path forward + cookies cleared, swallow on Flask reject, swallow on 401)
+  - `frontend/tests/unit/refresh-handler.test.ts` (3 cases: happy-path cookie rotation, 401 when no refresh cookie, no rotation when Flask rejects)
+  - `frontend/tests/unit/me-handler.test.ts` (3 cases: unwraps user when flaskHeaders present, 401 when missing, propagates Flask 401 when token invalid)
+  Total vitest count grew from 73 to 82 (+9 cases). Close-when criterion met.
 
 ### 🟡 TD-014 · `NUXT_FLASK_URL` SSR-side requirement not yet documented in deployment runbook
 

@@ -5,6 +5,50 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Tech debt sweep -- post-Phase-7] -- 2026-04-26
+
+Proactive sweep through the open TECH_DEBT register following the user
+memory note "post-Phase-7 cleanup planned". Three of ten open items
+were fixable now without product input or feature triggers; the rest
+stay open with their resolution triggers documented.
+
+### Closed
+
+- **TD-016**: BFF auth handlers (logout/refresh/me) now have direct
+  vitest coverage. Three new test files mirror the `login-handler.test.ts`
+  pattern (typed globalThis stubs, NEVER `as any`):
+  - `frontend/tests/unit/logout-handler.test.ts` (3 cases)
+  - `frontend/tests/unit/refresh-handler.test.ts` (3 cases)
+  - `frontend/tests/unit/me-handler.test.ts` (3 cases)
+  vitest total: 73 -> 82 (+9 cases).
+- **TD-005**: transitive deprecation warnings cleared upstream.
+  `npm install` in `frontend/` returns zero deprecation warnings now.
+  Tree audit: `inflight` no longer installed; `glob` is at 10.5.0 +
+  13.0.6 (modern); `@koa/router` no longer installed; `vue-i18n` is
+  11.3.2 top-level deduped.
+
+### Updated (still open, audit log appended)
+
+- **TD-003** (zod v3 pin): audited 2026-04-26.
+  `npm view @vee-validate/zod peerDependencies` -> still
+  `{ zod: '^3.24.0' }`. Latest is still `@vee-validate/zod@4.15.1`.
+  No upstream movement; stays open. Next audit: next quarterly check
+  or first `@vee-validate/zod` major version bump.
+
+### Still pending (resolution triggers documented)
+
+Seven items remain open, each gated on either product / brand
+decisions or specific feature work that has not yet started. They
+will close as their resolution triggers fire:
+
+- TD-007 (`docs/DESIGN.md` consolidation) -- product / design pass
+- TD-008 (2 missing location palettes) -- product venue catalog
+- TD-011 (jazzclub contrast) -- first jazzclub route
+- TD-012 (`useFormattedDate`) -- first locale-aware date page
+- TD-013 (livemagic vs error color collision) -- first livemagic route
+- TD-015 (login open-redirect validation) -- first login UI page
+- TD-017 (location_id NULL coercion) -- first event-create UI / nullable-venue UX
+
 ## [Phase 7 (Migration Definition of Done)] -- 2026-04-25
 
 Phase 7 closes the Nuxt 4 migration. No application code changed; this
