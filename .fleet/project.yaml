@@ -1,0 +1,84 @@
+schema_version: 1
+project_id: tdcweb
+agent_relationships:
+  - id: tdc-accessibility-tester
+    claude: .claude/agents/tdc-accessibility-tester.md
+    codex: null
+  - id: tdc-advisory-architecture
+    claude: .claude/agents/tdc-advisory-architecture.md
+    codex: null
+  - id: tdc-advisory-coordinator
+    claude: .claude/agents/tdc-advisory-coordinator.md
+    codex: null
+  - id: tdc-advisory-performance
+    claude: .claude/agents/tdc-advisory-performance.md
+    codex: null
+  - id: tdc-advisory-risk
+    claude: .claude/agents/tdc-advisory-risk.md
+    codex: null
+  - id: tdc-advisory-security
+    claude: .claude/agents/tdc-advisory-security.md
+    codex: null
+  - id: tdc-api-expert
+    claude: .claude/agents/tdc-api-expert.md
+    codex: null
+  - id: tdc-auth-expert
+    claude: .claude/agents/tdc-auth-expert.md
+    codex: null
+  - id: tdc-backend-expert
+    claude: .claude/agents/tdc-backend-expert.md
+    codex: null
+  - id: tdc-browser-performance-tester
+    claude: .claude/agents/tdc-browser-performance-tester.md
+    codex: null
+  - id: tdc-code-reviewer
+    claude: .claude/agents/tdc-code-reviewer.md
+    codex: null
+  - id: tdc-database-expert
+    claude: .claude/agents/tdc-database-expert.md
+    codex: null
+  - id: tdc-design-enforcer
+    claude: .claude/agents/tdc-design-enforcer.md
+    codex: null
+  - id: tdc-design-system-enforcer
+    claude: .claude/agents/tdc-design-system-enforcer.md
+    codex: null
+  - id: tdc-documentation-expert
+    claude: .claude/agents/tdc-documentation-expert.md
+    codex: null
+  - id: tdc-e2e-tester
+    claude: .claude/agents/tdc-e2e-tester.md
+    codex: null
+  - id: tdc-frontend-expert
+    claude: .claude/agents/tdc-frontend-expert.md
+    codex: null
+  - id: tdc-integration-expert
+    claude: .claude/agents/tdc-integration-expert.md
+    codex: null
+  - id: tdc-network-expert
+    claude: .claude/agents/tdc-network-expert.md
+    codex: null
+  - id: tdc-orchestrator
+    claude: .claude/agents/tdc-orchestrator.md
+    codex: null
+  - id: tdc-performance-expert
+    claude: .claude/agents/tdc-performance-expert.md
+    codex: null
+  - id: tdc-problem-isolator
+    claude: .claude/agents/tdc-problem-isolator.md
+    codex: null
+  - id: tdc-security-expert
+    claude: .claude/agents/tdc-security-expert.md
+    codex: null
+  - id: tdc-testing-expert
+    claude: .claude/agents/tdc-testing-expert.md
+    codex: null
+  - id: tdc-troubleshooting-expert
+    claude: .claude/agents/tdc-troubleshooting-expert.md
+    codex: null
+  - id: tdc-ux-researcher
+    claude: .claude/agents/tdc-ux-researcher.md
+    codex: null
+  - id: tdc-visual-tester
+    claude: .claude/agents/tdc-visual-tester.md
+    codex: null
