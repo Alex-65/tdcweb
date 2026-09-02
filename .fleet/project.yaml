@@ -3,82 +3,82 @@ project_id: tdcweb
 agent_relationships:
   - id: tdc-accessibility-tester
     claude: .claude/agents/tdc-accessibility-tester.md
-    codex: null
+    codex: .codex/agents/tdc-accessibility-tester.toml
   - id: tdc-advisory-architecture
     claude: .claude/agents/tdc-advisory-architecture.md
-    codex: null
+    codex: .codex/agents/tdc-advisory-architecture.toml
   - id: tdc-advisory-coordinator
     claude: .claude/agents/tdc-advisory-coordinator.md
-    codex: null
+    codex: .codex/agents/tdc-advisory-coordinator.toml
   - id: tdc-advisory-performance
     claude: .claude/agents/tdc-advisory-performance.md
-    codex: null
+    codex: .codex/agents/tdc-advisory-performance.toml
   - id: tdc-advisory-risk
     claude: .claude/agents/tdc-advisory-risk.md
-    codex: null
+    codex: .codex/agents/tdc-advisory-risk.toml
   - id: tdc-advisory-security
     claude: .claude/agents/tdc-advisory-security.md
-    codex: null
+    codex: .codex/agents/tdc-advisory-security.toml
   - id: tdc-api-expert
     claude: .claude/agents/tdc-api-expert.md
-    codex: null
+    codex: .codex/agents/tdc-api-expert.toml
   - id: tdc-auth-expert
     claude: .claude/agents/tdc-auth-expert.md
-    codex: null
+    codex: .codex/agents/tdc-auth-expert.toml
   - id: tdc-backend-expert
     claude: .claude/agents/tdc-backend-expert.md
-    codex: null
+    codex: .codex/agents/tdc-backend-expert.toml
   - id: tdc-browser-performance-tester
     claude: .claude/agents/tdc-browser-performance-tester.md
-    codex: null
+    codex: .codex/agents/tdc-browser-performance-tester.toml
   - id: tdc-code-reviewer
     claude: .claude/agents/tdc-code-reviewer.md
-    codex: null
+    codex: .codex/agents/tdc-code-reviewer.toml
   - id: tdc-database-expert
     claude: .claude/agents/tdc-database-expert.md
-    codex: null
+    codex: .codex/agents/tdc-database-expert.toml
   - id: tdc-design-enforcer
     claude: .claude/agents/tdc-design-enforcer.md
-    codex: null
+    codex: .codex/agents/tdc-design-enforcer.toml
   - id: tdc-design-system-enforcer
     claude: .claude/agents/tdc-design-system-enforcer.md
-    codex: null
+    codex: .codex/agents/tdc-design-system-enforcer.toml
   - id: tdc-documentation-expert
     claude: .claude/agents/tdc-documentation-expert.md
-    codex: null
+    codex: .codex/agents/tdc-documentation-expert.toml
   - id: tdc-e2e-tester
     claude: .claude/agents/tdc-e2e-tester.md
-    codex: null
+    codex: .codex/agents/tdc-e2e-tester.toml
   - id: tdc-frontend-expert
     claude: .claude/agents/tdc-frontend-expert.md
-    codex: null
+    codex: .codex/agents/tdc-frontend-expert.toml
   - id: tdc-integration-expert
     claude: .claude/agents/tdc-integration-expert.md
-    codex: null
+    codex: .codex/agents/tdc-integration-expert.toml
   - id: tdc-network-expert
     claude: .claude/agents/tdc-network-expert.md
-    codex: null
+    codex: .codex/agents/tdc-network-expert.toml
   - id: tdc-orchestrator
     claude: .claude/agents/tdc-orchestrator.md
-    codex: null
+    codex: .codex/agents/tdc-orchestrator.toml
   - id: tdc-performance-expert
     claude: .claude/agents/tdc-performance-expert.md
-    codex: null
+    codex: .codex/agents/tdc-performance-expert.toml
   - id: tdc-problem-isolator
     claude: .claude/agents/tdc-problem-isolator.md
-    codex: null
+    codex: .codex/agents/tdc-problem-isolator.toml
   - id: tdc-security-expert
     claude: .claude/agents/tdc-security-expert.md
-    codex: null
+    codex: .codex/agents/tdc-security-expert.toml
   - id: tdc-testing-expert
     claude: .claude/agents/tdc-testing-expert.md
-    codex: null
+    codex: .codex/agents/tdc-testing-expert.toml
   - id: tdc-troubleshooting-expert
     claude: .claude/agents/tdc-troubleshooting-expert.md
-    codex: null
+    codex: .codex/agents/tdc-troubleshooting-expert.toml
   - id: tdc-ux-researcher
     claude: .claude/agents/tdc-ux-researcher.md
-    codex: null
+    codex: .codex/agents/tdc-ux-researcher.toml
   - id: tdc-visual-tester
     claude: .claude/agents/tdc-visual-tester.md
-    codex: null
+    codex: .codex/agents/tdc-visual-tester.toml
