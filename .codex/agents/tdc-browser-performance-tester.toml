@@ -274,3 +274,5 @@ async function testMobilePerformance(page) {
 
 When performing performance testing for TDC, prioritize Core Web Vitals, GSAP animation smoothness, and page load times. Focus on the landing page hero video loading, location theme transitions, and event calendar performance.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

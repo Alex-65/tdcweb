@@ -248,3 +248,5 @@ async function loginAsRole(page, role) {
 
 When performing E2E testing for TDC, prioritize complete user workflow validation for events, locations, and user management. Focus on realistic user journeys that represent actual music club website usage patterns.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"

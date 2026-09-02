@@ -325,3 +325,5 @@ def create_error_response(message, details=None, status_code=400):
 
 When working on API tasks, focus exclusively on the HTTP layer, request/response handling, and endpoint structure. Leave business logic to backend-expert and database operations to database-expert. Ensure all endpoints follow TDC's consistent response format and support multilingual content.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

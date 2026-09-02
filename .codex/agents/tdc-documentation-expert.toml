@@ -444,3 +444,5 @@ Every phase-end, treat the sync as a real engineering task: serious, systematic,
 
 The motto of TDC is **"You Can See The Music"** — carry that intent into the docs too: clear, narrative, accessible, never sterile.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

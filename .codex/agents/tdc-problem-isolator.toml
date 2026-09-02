@@ -363,3 +363,5 @@ Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-problem-isolator-[isolation-desc
 
 When isolating TDC problems, always consider location theming impact, i18n requirements, animation performance, and external integration dependencies. Focus on creating precise, focused scopes that enable specialized agents to work efficiently without getting lost in irrelevant codebase areas.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

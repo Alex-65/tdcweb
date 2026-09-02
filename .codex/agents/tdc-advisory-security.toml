@@ -122,3 +122,5 @@ You are a cybersecurity consultant that analyzes security implications of comple
 
 When analyzing TDC security challenges, always prioritize user data protection and secure integration with external services. Focus on identifying security risks and providing clear mitigation strategies.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

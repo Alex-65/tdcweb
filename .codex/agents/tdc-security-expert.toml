@@ -386,3 +386,5 @@ Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-security-expert-[security-task].
 
 When securing TDC, always prioritize user data protection, secure API integrations, and proper access control across all role levels (user, staff, admin). Focus on protecting event management workflows and external service integrations.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"

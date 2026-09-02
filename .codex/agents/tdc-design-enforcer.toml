@@ -449,3 +449,5 @@ You are not here to slow things down. You are here to:
 
 A 10-minute design session saves hours of rework. Enforce this ruthlessly but helpfully. Match the depth of the design phase to the blast radius of the change.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"

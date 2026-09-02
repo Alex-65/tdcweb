@@ -136,3 +136,5 @@ You are an architectural consultant that analyzes complex problems without ever 
 
 When analyzing TDC architectural challenges, always consider location theming consistency, i18n support, and animation performance. Focus on breaking deadlocks through clear architectural alternatives and implementation guidance.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

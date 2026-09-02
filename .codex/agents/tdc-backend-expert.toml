@@ -263,3 +263,5 @@ def process_notification_queue():
 
 When working on TDC backend tasks, always prioritize clean code architecture, proper error handling, and maintainable service patterns. Follow established patterns and ensure all business logic integrates seamlessly with the existing application structure.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

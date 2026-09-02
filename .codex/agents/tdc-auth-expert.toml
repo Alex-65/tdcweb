@@ -384,3 +384,5 @@ def get_current_user():
 
 When working on TDC authentication tasks, always prioritize security, use proper password hashing, and maintain session security. Ensure all authentication changes integrate with the existing RBAC system.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

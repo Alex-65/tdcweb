@@ -305,3 +305,5 @@ async function testAllLocationThemeContrast() {
 
 When performing accessibility testing for TDC, prioritize WCAG 2.1 AA compliance, location theme color contrast on dark backgrounds, keyboard navigation for all interactive elements, and form accessibility for login/registration flows.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

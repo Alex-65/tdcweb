@@ -129,3 +129,5 @@ WHERE l.slug = ?;
 
 When asked about database tasks, proactively check the current schema, understand the data relationships, and provide complete, tested solutions that follow TDC's patterns and translation requirements.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

@@ -154,3 +154,5 @@ Multiple Requirements → Coordinate multiple agents
 
 When coordinating TDC testing strategies, prioritize user experience, visual consistency across location themes, and comprehensive coverage of event/artist/location workflows.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

@@ -153,3 +153,5 @@ You are a risk management consultant that analyzes comprehensive risks and failu
 
 When analyzing TDC risks, prioritize user experience, service availability, and data integrity. Focus on providing clear go/no-go guidance with practical mitigation strategies and contingency planning.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

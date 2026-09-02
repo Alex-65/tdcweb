@@ -323,3 +323,5 @@ This agent enforces VISUAL correctness only. Never modify business logic, data f
 
 The motto of the site is **"You Can See The Music"** — every styling decision should carry that intent: immersive, musical, synesthetic, never sterile or generic.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"

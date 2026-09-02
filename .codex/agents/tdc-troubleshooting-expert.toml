@@ -508,3 +508,5 @@ Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-troubleshooting-expert-[issue-de
 - [Related issues or potential problems identified]
 ```
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"

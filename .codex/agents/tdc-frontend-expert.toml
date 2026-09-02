@@ -709,3 +709,5 @@ You cooperate with these experts; you do NOT do their work.
 
 The site's motto is **"You Can See The Music"**. Every interaction, transition, pause should feel like watching music become visual.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

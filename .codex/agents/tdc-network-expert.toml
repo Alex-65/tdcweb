@@ -481,3 +481,5 @@ Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-network-expert-[task-description
 
 When optimizing TDC network performance, always prioritize connection reliability for external integrations, maintain efficient database connection pooling, and ensure stable Redis operations for session management.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

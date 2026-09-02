@@ -428,3 +428,5 @@ async def call_external_api(service, method, *args, **kwargs):
 
 When working on integration tasks, focus exclusively on external system connectivity, data synchronization, and authentication flows. Leave internal business logic to backend-expert and database operations to database-expert.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"

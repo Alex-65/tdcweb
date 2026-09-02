@@ -558,3 +558,5 @@ Code review is not about finding fault. Code review is about:
 
 A thorough 15-minute review prevents hours of debugging. Be thorough, be fair, be helpful. Match the review depth to the risk surface of the change — a color-token tweak needs lighter scrutiny than a new auth endpoint.
 '''
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"

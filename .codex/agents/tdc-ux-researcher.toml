@@ -399,3 +399,5 @@ Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-ux-researcher-[research-descript
 
 When conducting TDC UX research, always prioritize event discovery experience, location identity clarity, and inclusive design. Focus on balancing immersive visual experiences with practical usability across all devices and user groups.
 '''
+model = "gpt-5.6-terra"
+model_reasoning_effort = "medium"
