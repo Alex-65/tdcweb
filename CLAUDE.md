@@ -2,12 +2,12 @@
 
 ## 🔴 NEVER IGNORE - CORE RULES (ALWAYS ACTIVE)
 1. **DEBUG FIRST, CODE NEVER** → Add console.log/logger debug EVERYWHERE before any fix. Read logs. Understand problem with PROOF. Only then fix. ZERO trial-and-error.
-2. **MUST use subagents for complex work** (2+ files = expert, unclear = problem-isolator)
+2. **MUST use subagents for complex work** (unclear = problem-isolator)
 3. **Domain experts mandatory**: Database→database-expert, Vue→frontend-expert, Flask→backend-expert
 4. **Problem unclear?** → problem-isolator FIRST, never guess or explore alone
 5. **PREFER EXPERT DIRETTI over orchestrator** → Use specific domain experts directly for transparency. Orchestrator only for 10+ parallel agents or complex decision trees. Multi-phase sequential workflows = call experts directly, one per phase.
 6. **Zero superficiality** → Complete understanding BEFORE any modification
-7. **File size limits**: NEW files must respect limits (.vue ≤500, .py ≤1000, .ts ≤800), existing large files = do NOT refactor unless absolutely necessary
+7. **File size limits**: existing large files = do NOT refactor unless absolutely necessary
 8. **Fix-Test-Verify**: Find bug → Apply fix → TEST IMMEDIATELY → Only continue if problem persists
 9. **ABSOLUTELY FORBIDDEN: Batch file modifications** → NEVER use scripts or batch commands to modify multiple files. Each file modification MUST be done individually, manually, with explicit user visibility
 10. **TEST BEFORE DECLARING DONE** → NEVER say a modification is complete without running tests that prove it works
@@ -15,6 +15,11 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
+15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-system-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of committing only when documentation is simultaneously updated.
+16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`** analyzes the git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Design specs:** `tdc-design-enforcer` owns approved specs under `docs/superpowers/specs/`.
+17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
+18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
+19. **USER INTENT CODIFICATION** → Reviewers check the implementation against what is **formally documented** in `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/plans/pdp-v3.md` — they do NOT infer requirements from conversation history. Therefore: before a review (rule 16 step a0), the controller scans the session conversation for user decisions / requests / scope changes that have NOT yet been codified in the plan. For each such item: (a) update the plan task list with an explicit task for the current or a future phase; or (b) explicitly defer with a rationale, logged as a TECH_DEBT entry with a resolution trigger; or (c) fold it into the current phase's commit scope if it's small and timely. Save the scan artifact as `docs/reviews/YYYY-MM-DD-user-intent-scan-phase-<N>.md` with the mapping table (user decision → codification artifact). This closes the gap whereby a user decision made in conversation but never written to the plan would go unverified at review time.
 
 ---
 
@@ -23,7 +28,7 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 **Project:** tdcweb - The Dreamer's Cave Virtual Music Club Website
 **Domain:** thedreamerscave.club
 **Motto:** "You Can See The Music"
-**Last Updated**: January 2025
+**Last Updated**: 2026-04-24 (Phase 3 — Nuxt 4 frontend port: public pages, components, composables, Pinia stores, i18n content)
 
 ## 🚨 CRITICAL DEVELOPMENT PRINCIPLES
 
@@ -85,6 +90,93 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 **IRON RULE**: *If you haven't seen debug output proving what's wrong, you don't know what's wrong. PERIOD.*
 
+## 📋 SUBAGENT-DRIVEN IMPLEMENTATION WORKFLOW
+
+**`~/.canon/CANON.md` governs when review happens, when a commit is made and when work stops for the user. The boxes below keep the TDC test, review, cleanup and documentation surfaces.**
+
+### Per-task checks
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  1. DISPATCH subagent for the next task in the plan             │
+│     └─ pass: task spec + relevant context files                  │
+│     └─ explicit instruction: DO NOT commit                       │
+│                                                                  │
+│  2. Subagent EXECUTES the task                                   │
+│     └─ produces code + tests per the task's step list            │
+│     └─ does NOT run `git commit`                                 │
+│                                                                  │
+│  3. RUN ALL TESTS                                                │
+│     ├─ Backend:  pytest (all markers, respecting fixtures)      │
+│     ├─ Frontend: npm test (vitest, all spec files)              │
+│     └─ Integration: if the task touches a boundary              │
+│                                                                  │
+│  4. CREATE MISSING TESTS                                         │
+│     ├─ For any new code lacking tests (backend & frontend)      │
+│     ├─ Unit tests for pure logic                                 │
+│     ├─ Integration tests for cross-layer code                    │
+│                                                                  │
+│  5. WHEN DUE, tdc-code-reviewer (and tdc-design-system-enforcer  │
+│     if UI changes). Fix issues before proceeding.                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Review, real tests, cleanup, docs and commit
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  A. SPEC + CODE REVIEW (via tdc-code-reviewer, 2 phases)         │
+│     ├─ Phase 1: spec compliance across the whole phase           │
+│     └─ Phase 2: code quality / security / conventions /          │
+│        verification evidence                                     │
+│                                                                  │
+│  B. DESIGN-SYSTEM REVIEW (via tdc-design-system-enforcer)        │
+│     └─ Visual compliance for UI changes in this phase            │
+│        (dark theme, location CSS vars, Tailwind tokens, GSAP     │
+│        discipline, typography, spacing)                          │
+│                                                                  │
+│  C. REAL TESTS (not just smoke tests)                            │
+│     ├─ Full E2E journeys (Playwright, 1920x1080)                 │
+│     ├─ Integration tests (cross-service)                         │
+│     ├─ Performance sanity (LCP, bundle size, query timing)       │
+│     └─ Security smoke: auth boundaries, cookie flags, CSP        │
+│                                                                  │
+│  D. TEST STATE CLEANUP                                           │
+│     ├─ Identify what tests wrote (DB rows, files, external)      │
+│     ├─ Restore to pre-test state                                 │
+│     └─ Verify cleanup with a query/listing                       │
+│                                                                  │
+│  E. DOCUMENTATION SYNC (via tdc-documentation-expert)            │
+│     ├─ Analyze git diff for the phase                            │
+│     ├─ Update EVERY impacted doc per the Impact Matrix           │
+│     ├─ CREATE missing docs where needed                          │
+│     ├─ Validate link integrity + stack-reference currency        │
+│     └─ Return report (staging recommendation + commit message)   │
+│                                                                  │
+│  F. ATOMIC COMMIT(S)                                             │
+│     ├─ Code + docs committed together                            │
+│     ├─ One commit, or a small set of logically-grouped commits   │
+│     ├─ NEVER docs-only or code-only commits                      │
+│     └─ Commit message references spec + plan + SHA range         │
+│                                                                  │
+│  Push to remote happens ONLY with explicit user authorization,   │
+│  never automatically.                                            │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Hard rules
+
+- **Never skip steps 3-4** of the per-task checks. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
+- **Never skip a due review or the docs sync**. "The code looks fine" is not a substitute.
+- **Tests come WITH the code**. They land in the same commit as the feature they cover. No "I'll write tests later".
+- **DB/filesystem state after tests = DB/filesystem state before tests.** Always. This is enforced, not aspirational.
+- **Docs land WITH code.** If docs drift, it's caught and corrected by `tdc-documentation-expert` before the commit.
+- **Subagents do not commit.** Subagents produce code + tests in the working tree; the controller commits. Aligns with the user's practice of committing only alongside documentation updates.
+- **Push is always explicit.** `tdc-documentation-expert` and every other agent never push. Pushes happen only when the user explicitly authorizes each one.
+- **Possible additional review post-phase**: the user may request an extra review at some point after the phase closes. Treat it as a normal ad-hoc deliverable when it comes.
+
+---
+
 ## 🔴 FIX-TEST-VERIFY METHODOLOGY - ABSOLUTE RULE
 
 **When debugging/fixing issues:**
@@ -132,7 +224,6 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 - **Conflicting approaches** → Multiple advisory agents in parallel
 
 ### ⚖️ NON-NEGOTIABLE DECISION RULES:
-- **2+ files to modify** → MUST use relevant expert
 - **Don't know where to start** → MUST use `tdc-problem-isolator`
 - **Multiple domains involved** → Call specific experts directly (NOT orchestrator)
 - **Unsure about approach** → MUST use advisory system
@@ -173,7 +264,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 
 **IRON RULE**: *When in doubt, use expert diretti. Transparency > automation.*
 
-## 🤖 INTELLIGENT AGENT SYSTEM (24 Agents)
+## 🤖 INTELLIGENT AGENT SYSTEM (27 Agents)
 
 ### 🎯 USAGE PATTERNS
 
@@ -206,7 +297,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ### 🏗️ Core Development Team (7)
 - **tdc-database-expert**: MySQL schema, migrations, queries (NO SQLAlchemy)
 - **tdc-api-expert**: RESTful endpoints, validation, Second Life API
-- **tdc-frontend-expert**: Vue.js 3, TypeScript, Tailwind CSS, GSAP/ScrollTrigger
+- **tdc-frontend-expert**: Nuxt 4, Vue 3, TypeScript, Tailwind CSS, GSAP/ScrollTrigger/Lenis, SSR/SSG/ISR, BFF server routes
 - **tdc-backend-expert**: Flask architecture, business logic, services
 - **tdc-auth-expert**: Authentication, OAuth2, JWT, sessions, RBAC
 - **tdc-integration-expert**: Google Calendar, Facebook, Patreon, Second Life API
@@ -226,6 +317,12 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **tdc-network-expert**: Network diagnostics, connection pools
 - **tdc-troubleshooting-expert**: Debugging, log analysis
 - **tdc-problem-isolator**: Problem mapping and scope isolation
+
+### 🛡️ Review & Design Specialists (3)
+**`~/.canon/CANON.md` governs when review happens.**
+- **tdc-design-enforcer**: Design specs. Produces approved specs at `docs/superpowers/specs/*-design.md` for features that need a design. Integrates with `superpowers:brainstorming` + `superpowers:writing-plans`.
+- **tdc-code-reviewer**: Post-implementation two-phase review. Phase 1 spec compliance, Phase 2 code quality + security + TDC conventions + verification evidence.
+- **tdc-design-system-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens).
 
 ### 🧠 Coordination (2)
 - **tdc-orchestrator**: Master coordinator for complex workflows
@@ -259,19 +356,61 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 |-------|------------|
 | **Backend** | Python 3.11+ / Flask |
 | **Database** | MySQL 8.x with mysql-connector-python (NO SQLAlchemy) |
-| **Frontend** | Vue.js 3 (Composition API) + Vite |
-| **Styling** | Tailwind CSS |
-| **Animations** | GSAP + ScrollTrigger + Lenis |
-| **State** | Pinia |
-| **i18n** | Vue I18n (EN, IT, FR, ES) |
-| **Auth** | Flask-Login + JWT + OAuth2 (Google, Discord, Facebook) |
+| **Frontend** | **Nuxt 4** (Vue 3 Composition API) + Vite + **TypeScript (strict)** |
+| **Frontend ports** | Dev `:9503`, Prod `:9501` (node SSR server) |
+| **Backend ports** | Dev `:9502`, Prod `:9500` (gunicorn) |
+| **Styling** | Tailwind CSS + CSS variables (per-location theming) |
+| **Animations** | GSAP + ScrollTrigger + Lenis (client-only `.client.ts` plugins) |
+| **State** | Pinia via `@pinia/nuxt` |
+| **i18n** | `@nuxtjs/i18n` — `prefix_except_default`, EN default, `/it/ /fr/ /es/` |
+| **SEO** | `@nuxtjs/seo` + `@nuxtjs/sitemap` + `@nuxtjs/robots` (useSeoMeta, useSchemaOrg) |
+| **Image** | `@nuxt/image` (`<NuxtImg>`, auto avif/webp) |
+| **Forms** | vee-validate + zod (same schema client+server via `readValidatedBody`) |
+| **Rich text** | `@tiptap/vue-3` (admin-only, `<ClientOnly>`-wrapped) |
+| **Auth transport** | **JWT HttpOnly cookies** (`tdc_access` 15min Lax, `tdc_refresh` 7d Strict Path=/api/auth, rotated on use) |
+| **Auth emit** | Flask + JWT + OAuth2 (Google, Discord, Facebook) |
+| **BFF** | Nuxt `server/api/auth/**` + `server/api/revalidate` (auth cookie handling + on-demand ISR). All other `/api/**` proxy to Flask. |
 | **Task Queue** | Celery + Redis |
+| **Testing** | vitest + `@nuxt/test-utils` + happy-dom (unit/component); Playwright (E2E, 1920x1080) |
 
 ### External Integrations
 - **Google Calendar**: Staff + Public event calendars
 - **Facebook**: Page + Group posting
 - **Patreon**: Supporter management, webhooks, exclusive content
 - **Second Life**: In-world API for event displays
+
+### 🎬 Rendering Strategy (per-route, via `routeRules` in `nuxt.config.ts`)
+
+| Route pattern | Strategy | TTL / Notes |
+|---|---|---|
+| `/`, `/about`, `/contact` | **SSG** (`prerender: true`) | Build-time; rare changes |
+| `/locations`, `/locations/**` | **SSG** + on-demand revalidate | 10 fixed venues, admin-edited |
+| `/artists`, `/artists/**` | **SSG** + on-demand revalidate | Few changes |
+| `/events`, `/events/**` | **ISR** (`swr: 300`) | 5 min stale-while-revalidate |
+| `/blog`, `/blog/**` | **ISR** (`swr: 3600`) + on-demand | 1h + instant-publish via revalidate |
+| `/auth/login`, `/auth/register`, `/auth/callback/**` | **SSR** (no cache) | Dynamic per session |
+| `/dashboard/**`, `/admin/**` | **SPA** (`ssr: false`) | Auth-gated, no SEO value |
+| `/api/auth/**`, `/api/revalidate` | Nitro server routes (BFF) | Handled by Nuxt node |
+| `/api/**` (other) | Proxied to Flask | via Apache (prod, `mod_proxy_http`) or Nitro devProxy (dev) |
+
+**On-demand revalidation**: admin save → client POSTs `/api/revalidate { path }` → Nitro clears cache for that path → next visitor gets fresh content.
+
+### 🔒 SSR Client-Only Rules (NON-NEGOTIABLE)
+
+1. **GSAP + ScrollTrigger** → only in `*.client.ts` plugins. Use `gsap.context()` + `ctx.revert()` on `onBeforeUnmount`, else ScrollTrigger leaks across navigations and breaks scroll.
+2. **Lenis** → only in `app/plugins/lenis.client.ts`. Sync with `gsap.ticker.add(lenis.raf)` — NEVER a separate `requestAnimationFrame` loop. Stop on `/admin/*` and `/dashboard/*`.
+3. **Browser globals** (`window`, `document`, `localStorage`, `sessionStorage`, `matchMedia`, `IntersectionObserver`, `ResizeObserver`) → forbidden in `setup()` top-level. Use `onMounted()` or `.client.ts` files.
+4. **Hydration-mismatch generators in templates** (`new Date()`, `Math.random()`, `crypto.randomUUID()`, `navigator.language`) → forbidden. Use ref + `onMounted` to set, or `<ClientOnly>` with matching-shape `#fallback`.
+5. **TipTap / canvas / WebGL** → always inside `<ClientOnly>` with a matching-shape fallback, or in a page with `ssr: false`.
+6. **Location theming** → `useHead({ bodyAttrs: { 'data-location': slug } })` + CSS vars in `app/assets/css/main.css`. Zero-JS at paint, SSR-safe.
+7. **Auth tokens in cookies only** → `httpOnly: true, secure: prod, sameSite: 'lax'/'strict'`. NEVER in `localStorage`, NEVER readable by JS.
+
+**References**:
+- Deep spec: `docs/superpowers/specs/2026-04-23-nuxt-integration-design.md`
+- Implementation plan: `docs/superpowers/plans/2026-04-23-nuxt-integration.md`
+- Frontend playbook: `docs/frontend/nuxt-playbook.md`
+- Project plan v3: `docs/plans/pdp-v3.md` (current, Nuxt 4 era)
+- v2 (historical): `docs/plans/pdp-v2.md`
 
 ## 💬 Communication Style - CRITICAL
 **🔴 BE DIRECT AND HONEST - NO EMPTY PRAISE**
@@ -289,11 +428,6 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **REFACTORING = STRUCTURE ONLY** - move code, split components, organize logic
 
 ## 📏 FILE SIZE LIMITS - PRAGMATIC APPROACH
-**🔴 MANDATORY for NEW files: Split when they exceed these thresholds**
-- **Vue.js components** (.vue): MAX 500 lines - split into sub-components or composables
-- **Python files** (.py): MAX 1000 lines - split into modules or separate classes
-- **TypeScript files** (.ts): MAX 800 lines - split into modules or separate services
-
 **🟡 EXISTING large files: Pragmatic survival rules**
 - **DO NOT refactor** existing large files unless absolutely necessary
 - **Small modifications** on large files are acceptable without refactoring
@@ -306,7 +440,8 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **⛔ AVOID**: MCP filesystem tools for content changes
 - **✅ MCP FILESYSTEM OK for**: Directory listing, file info, search operations only
 
-## 📚 DOCUMENTATION UPDATE MANDATORY WORKFLOW
+## 📚 DOCUMENTATION UPDATE WORKFLOW
+**`~/.canon/CANON.md` §Commit owns when documentation is updated and how it lands with the change.**
 **🔴 AUTOMATIC TRIGGER: When user requests documentation updates, commits, or pushes**
 
 **Trigger Phrases** (auto-detect):
@@ -315,63 +450,75 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - "commit and push" / "fai commit e push"
 - Any phrase combining documentation + commit/push
 
-**MANDATORY WORKFLOW**:
+**WORKFLOW**:
 1. **🤖 AUTO-LAUNCH tdc-documentation-expert agent**
-2. **🔴 CRITICAL: SINGLE COMMIT REQUIREMENT**
-   - **ONE ATOMIC COMMIT** with comprehensive message
-   - **NO separate documentation-only commits**
 
 ## 📂 PROJECT STRUCTURE
 
 ```
 /data1/tdcweb/
-├── backend/
+├── backend/                     # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── models/          # Database table definitions
+│   │   ├── config.py
+│   │   ├── models/              # MySQL table bindings
 │   │   ├── routes/
-│   │   │   ├── api/         # REST API endpoints
-│   │   │   └── admin/       # Admin-only endpoints
-│   │   ├── services/        # Business logic layer
-│   │   ├── utils/           # Helpers (db.py, validators.py, decorators.py)
-│   │   └── tasks/           # Celery async tasks
-│   ├── migrations/          # Database migrations
+│   │   │   ├── api/             # Public REST API (/api/*)
+│   │   │   └── admin/           # Admin-only endpoints
+│   │   ├── services/            # Business logic layer
+│   │   ├── utils/               # db.py, responses.py, decorators.py, validators.py
+│   │   └── tasks/               # Celery async tasks
+│   ├── migrations/
 │   └── tests/
 │
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # Vue components by domain
-│   │   │   ├── common/
-│   │   │   ├── landing/
-│   │   │   ├── locations/
-│   │   │   ├── events/
-│   │   │   ├── artists/
-│   │   │   ├── blog/
-│   │   │   ├── auth/
-│   │   │   ├── user/
-│   │   │   └── admin/
-│   │   ├── composables/     # Vue composables (useLocationTheme, useScrollAnimation)
-│   │   ├── stores/          # Pinia state management
-│   │   ├── views/           # Route-specific pages
-│   │   │   └── admin/
-│   │   ├── router/          # Vue Router
-│   │   ├── i18n/            # Translations (EN, IT, FR, ES)
-│   │   ├── styles/          # Global CSS + Tailwind
-│   │   ├── assets/          # Images, videos, fonts
-│   │   └── utils/
-│   └── public/
+├── frontend/                    # Nuxt 4 + Vue 3 + TypeScript (strict)
+│   ├── app/                     # Nuxt 4 `app/` layer
+│   │   ├── app.vue
+│   │   ├── assets/css/          # main.css (Tailwind v4 + @theme + location vars)
+│   │   ├── components/          # <AppHeader />, by-domain subfolders (later phases)
+│   │   ├── composables/         # useLocationTheme, useScrollAnimation (later phases)
+│   │   ├── middleware/          # auth.ts, admin.ts, staff.ts (route guards, Phase 4)
+│   │   ├── plugins/             # gsap.client.ts, lenis.client.ts (client-only)
+│   │   ├── stores/              # Pinia (user.ts, ui.ts, … later phases)
+│   │   ├── types/               # Shared TS types (api, user, location, event)
+│   │   └── utils/               # auth-guard.ts (pure helpers, Phase 4)
+│   ├── server/                  # Nitro server routes — hybrid BFF
+│   │   ├── api/                 # auth/**, revalidate (later phases)
+│   │   ├── middleware/          # auth-forward.ts
+│   │   └── utils/               # cookies.ts, flask-client.ts
+│   ├── i18n/locales/            # @nuxtjs/i18n JSON — en.json, it.json, fr.json, es.json
+│   ├── public/                  # Static assets (served as-is)
+│   ├── tests/                   # vitest unit specs · Playwright E2E (later phases)
+│   ├── nuxt.config.ts
+│   ├── vitest.config.ts
+│   ├── .env.example
+│   └── package.json
 │
 ├── docs/
-│   └── plans/
-│       └── pdp-v2.md        # Project Development Plan
+│   ├── TECH_DEBT.md             # Technical debt register (rule 18)
+│   ├── api/                     # REST API reference
+│   ├── backend/                 # Flask architecture
+│   ├── database/                # Schema / migrations
+│   ├── deployment/              # Dev + prod runbooks
+│   ├── frontend/                # nuxt-playbook.md (frontend reference)
+│   ├── i18n/
+│   ├── integrations/
+│   ├── plans/                   # pdp-v2.md (historical), pdp-v3.md (current)
+│   ├── reviews/                 # Review artifacts (code, design, docs sync)
+│   └── superpowers/
+│       ├── specs/               # Phase-specific architectural specs
+│       └── plans/               # Phase-specific task-level plans
 │
-├── nginx/                   # Nginx configuration
+├── apache/                      # Production Apache vhost config (Phase 6)
 │
 ├── .claude/
-│   ├── agents/              # 24 specialized agents (tdc-*)
-│   └── skills/              # 5 skills (tdc-docs, tdc-backend, etc.)
+│   ├── agents/                  # 27 specialized agents (tdc-*)
+│   └── skills/                  # CLI skills (tdc-docs, tdc-backend, tdc-frontend, tdc-database, tdc-testing)
 │
-└── CLAUDE.md                # This file
+├── CHANGELOG.md
+├── README.md
+├── dev.sh                       # Dev-server manager (Flask :9502 + Nuxt :9503)
+└── CLAUDE.md                    # This file
 ```
 
 ## 🗄️ Database Configuration
@@ -450,72 +597,125 @@ def query_db(sql, params=None, one=False):
 
 ## 🎨 Location Theming System
 
-Each location has a unique visual identity using CSS variables:
+Each location has a unique visual identity. All palettes live in
+**one file**: `frontend/app/assets/css/main.css`. Tailwind v4 `@theme`
+maps Tailwind color tokens (`primary`, `secondary`, `accent`, `dark`,
+`surface`) to `--tdc-color-*` CSS vars. `[data-location="<slug>"]` blocks
+under `@layer base` override those vars. The slug is stamped on `<body>`
+by `useLocationTheme(slug)` via `useHead({ bodyAttrs })` — SSR-safe,
+zero-JS at paint.
 
 ```css
-/* Example: The Dreamer's Cave */
-[data-location="dreamerscave"] {
-  --color-primary: #0891b2;
-  --color-secondary: #06b6d4;
-  --color-accent: #22c55e;
-  --color-dark: #0c1222;
-  --gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+/* frontend/app/assets/css/main.css */
+@theme {
+  --color-primary: var(--tdc-color-primary);
+  --color-secondary: var(--tdc-color-secondary);
+  /* … */
+}
+
+@layer base {
+  :root {                         /* default palette */
+    --tdc-color-primary: #0891b2;
+    /* … */
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+  [data-location="dreamerscave"] { /* overrides when body[data-location="dreamerscave"] */
+    --tdc-color-primary: #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent: #22c55e;
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+  /* … 7 more location blocks, grouped by mood */
 }
 ```
 
-**Mood Categories:**
-- **Cosmic/Tech**: DreamersCave, DreamVision, Evanescence
-- **Hybrid**: LiveMagic, The Lounge
-- **Warm/Intimate**: Arquipélago, Noah's Ark, Jazz Club
+**Slug convention:** all lowercase, no spaces, no diacritics
+(`thelounge`, `arquipelago`, `noahsark`, `jazzclub`). Display names are
+UI-layer only — never used as attribute values.
 
-## 🎬 Animation System (GSAP)
+**Mood categories (8 of 10+ palettes live — see TD-008):**
+- **Cosmic/Tech**: `dreamerscave`, `dreamvision`, `evanescence`
+- **Hybrid**: `livemagic`, `thelounge`
+- **Warm/Intimate**: `arquipelago`, `noahsark`, `jazzclub`
 
-**Core Libraries:**
-- **GSAP**: Main animation engine
-- **ScrollTrigger**: Scroll-based animations
-- **Lenis**: Smooth scrolling
+Full reference: `docs/frontend/nuxt-playbook.md` §14.
 
-**Composable Pattern:**
-```javascript
-// composables/useScrollAnimation.js
+## 🎬 Animation System (GSAP + ScrollTrigger + Lenis)
+
+**Core libraries:**
+- **GSAP** — main animation engine
+- **ScrollTrigger** — scroll-based animations
+- **Lenis** — smooth scrolling (package name: `lenis`, NOT `@studio-freight/lenis`)
+
+**SSR discipline** (per `§ SSR Client-Only Rules`):
+- GSAP and Lenis are registered in **client-only plugins**
+  (`frontend/app/plugins/gsap.client.ts`, `frontend/app/plugins/lenis.client.ts`)
+  — the `.client.ts` suffix excludes them from the SSR bundle.
+- Lenis's RAF is synced via `gsap.ticker.add(...)` — never a second
+  `requestAnimationFrame` loop (two RAFs drift out of sync and visibly jitter).
+- Lenis is stopped on `/admin/*` and `/dashboard/*` (data tables, scroll-into-view,
+  keyboard navigation need native browser scroll).
+
+**Plugin pattern (Phase 2):**
+```typescript
+// frontend/app/plugins/gsap.client.ts
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import Lenis from '@studio-freight/lenis'
 
-gsap.registerPlugin(ScrollTrigger)
+export default defineNuxtPlugin(() => {
+  gsap.registerPlugin(ScrollTrigger)
+  return { provide: { gsap, ScrollTrigger } }
+})
+```
 
+**Composable pattern (Phase 5+) — animation cleanup is MANDATORY:**
+```typescript
+// frontend/app/composables/useScrollAnimation.ts
 export function useScrollAnimation() {
-  const initSmoothScroll = () => {
-    const lenis = new Lenis({ duration: 1.2 })
-    // ...
-  }
+  const { $gsap } = useNuxtApp()
+  const ctx = $gsap.context(() => {
+    // Declare animations inside the context so ctx.revert()
+    // can kill them on unmount, preventing ScrollTrigger leaks
+    // across route navigations.
+  })
+  onBeforeUnmount(() => ctx.revert())
 
-  const animateReveal = (elements, options = {}) => {
-    gsap.from(elements, {
+  const animateReveal = (els: Element[]) => {
+    $gsap.from(els, {
       y: 100,
       opacity: 0,
       duration: 1,
       stagger: 0.2,
-      scrollTrigger: { trigger: elements[0], start: 'top 80%' }
+      scrollTrigger: { trigger: els[0], start: 'top 80%' },
     })
   }
 
-  return { initSmoothScroll, animateReveal }
+  return { animateReveal }
 }
 ```
 
+Detailed patterns: `docs/frontend/nuxt-playbook.md` §§ 8–9.
+
 ## 🌐 i18n System
 
-**Supported Languages:**
-- **EN** (default)
+**Module:** `@nuxtjs/i18n` (Nuxt module, NOT raw `vue-i18n`).
+**Strategy:** `prefix_except_default` — English at `/`, others at `/it/`, `/fr/`, `/es/`.
+
+**Supported languages:**
+- **EN** (default, no URL prefix)
 - **IT** (Italian)
 - **FR** (French)
 - **ES** (Spanish)
 
-**Translation Strategy:**
-- UI strings: JSON files in `/frontend/src/i18n/`
-- Content: Database `*_translations` tables (location_translations, event_translations, etc.)
-- Language detection: URL param > cookie > browser preference > default (EN)
+**Translation strategy:**
+- **UI strings** — JSON locale files under `frontend/i18n/locales/{en,it,fr,es}.json`, loaded lazily.
+- **Content** — database `*_translations` tables (`location_translations`,
+  `event_translations`, …) fetched via Flask.
+- **Language detection** — URL prefix > `i18n_redirected` cookie > browser
+  `Accept-Language` > default EN. Configured in `frontend/nuxt.config.ts`
+  via `detectBrowserLanguage`.
+- **SEO** — hreflang tags emitted automatically by `@nuxtjs/seo` +
+  `@nuxtjs/i18n` when `runtimeConfig.public.siteUrl` is set.
 
 ## 🔐 Security Rules
 

@@ -1,0 +1,128 @@
+/* ===========================================================================
+ * The Dreamer's Cave — Main Stylesheet
+ * Tailwind CSS v4 (CSS-first config via @theme).
+ * Location-based theming is driven by CSS variables + [data-location="<slug>"]
+ * attribute set on <body> by useLocationTheme() via useHead({ bodyAttrs }).
+ * =========================================================================== */
+
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+ * DESIGN TOKENS (Tailwind v4 @theme block)
+ *
+ * Keeping the palette in CSS variables lets [data-location="<slug>"] override
+ * them at the document root without Tailwind having to regenerate utilities.
+ * Tailwind v4 auto-generates utilities like `bg-primary`, `text-accent`, etc.
+ * from any `--color-*` tokens here.
+ * --------------------------------------------------------------------------- */
+@theme {
+  /* Color tokens — values indirected through CSS vars defined in @layer base */
+  --color-primary: var(--tdc-color-primary);
+  --color-secondary: var(--tdc-color-secondary);
+  --color-accent: var(--tdc-color-accent);
+  --color-dark: var(--tdc-color-dark);
+  --color-surface: var(--tdc-color-surface);
+
+  /* Semantic-state token consumed via `text-error`, `bg-error`, `border-error` utilities.
+     Not overridden per location (error has universal meaning, palette-agnostic). */
+  --color-error: var(--tdc-color-error);
+
+  /* Typography */
+  --font-display: "Inter", "system-ui", sans-serif;
+  --font-body: "Inter", "system-ui", sans-serif;
+
+  /* Background gradient token consumed via `bg-hero-gradient` utility */
+  --background-image-hero-gradient: var(--tdc-gradient-hero);
+}
+
+/* ---------------------------------------------------------------------------
+ * THEME VARIABLES — defaults and per-location overrides
+ *
+ * :root is the default TDC palette (Cosmic/Tech base) applied when no location
+ * is active. [data-location="<slug>"] blocks override the variables when the
+ * corresponding slug is set on <body>.
+ *
+ * Three mood groupings per CLAUDE.md / nuxt-playbook §14:
+ *   - Cosmic/Tech : DreamersCave, DreamVision, Evanescence
+ *   - Hybrid      : LiveMagic, TheLounge
+ *   - Warm/Intimate: Arquipelago, NoahsArk, JazzClub
+ * (Palettes taken from the spec §10 + tdc-frontend-expert Location Theming
+ *  section. Two additional locations from the original "10+ themed venues"
+ *  catalogue are not yet designed — open item for a later design pass.)
+ * --------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --tdc-color-primary: #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent: #22c55e;
+    --tdc-color-dark: #0c1222;
+    --tdc-color-surface: #141420;
+    --tdc-color-error: #ef4444;
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+
+  /* ---- COSMIC / TECH ---------------------------------------------------- */
+  [data-location="dreamerscave"] {
+    --tdc-color-primary: #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent: #22c55e;
+    --tdc-gradient-hero: linear-gradient(135deg, #0891b2, #22c55e, #eab308);
+  }
+  [data-location="dreamvision"] {
+    --tdc-color-primary: #06b6d4;
+    --tdc-color-secondary: #22c55e;
+    --tdc-color-accent: #facc15;
+    --tdc-gradient-hero: linear-gradient(135deg, #06b6d4, #22c55e, #facc15);
+  }
+  [data-location="evanescence"] {
+    --tdc-color-primary: #8b5cf6;
+    --tdc-color-secondary: #a78bfa;
+    --tdc-color-accent: #ec4899;
+    --tdc-gradient-hero: linear-gradient(135deg, #8b5cf6, #ec4899, #facc15);
+  }
+
+  /* ---- HYBRID ----------------------------------------------------------- */
+  [data-location="livemagic"] {
+    --tdc-color-primary: #ef4444;
+    --tdc-color-secondary: #f97316;
+    --tdc-color-accent: #06b6d4;
+    --tdc-gradient-hero: linear-gradient(135deg, #ef4444, #f97316, #06b6d4);
+  }
+  [data-location="thelounge"] {
+    --tdc-color-primary: #db2777;
+    --tdc-color-secondary: #7c3aed;
+    --tdc-color-accent: #22d3ee;
+    --tdc-gradient-hero: linear-gradient(135deg, #db2777, #7c3aed, #22d3ee);
+  }
+
+  /* ---- WARM / INTIMATE -------------------------------------------------- */
+  [data-location="arquipelago"] {
+    --tdc-color-primary: #14b8a6;
+    --tdc-color-secondary: #22d3ee;
+    --tdc-color-accent: #f97316;
+    --tdc-gradient-hero: linear-gradient(135deg, #14b8a6, #22d3ee, #f97316);
+  }
+  [data-location="noahsark"] {
+    --tdc-color-primary: #d97706;
+    --tdc-color-secondary: #92400e;
+    --tdc-color-accent: #14b8a6;
+    --tdc-gradient-hero: linear-gradient(135deg, #d97706, #fbbf24, #14b8a6);
+  }
+  [data-location="jazzclub"] {
+    --tdc-color-primary: #92400e;
+    --tdc-color-secondary: #78350f;
+    --tdc-color-accent: #14b8a6;
+    --tdc-gradient-hero: linear-gradient(135deg, #92400e, #991b1b, #14b8a6);
+  }
+
+  /* ---- BASE DOCUMENT STYLES -------------------------------------------- */
+  html {
+    background-color: var(--tdc-color-dark);
+    color: #ffffff;
+  }
+  body {
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
