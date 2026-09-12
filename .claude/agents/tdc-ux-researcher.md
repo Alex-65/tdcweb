@@ -359,7 +359,7 @@ TDC_UX_METRICS = {
 
 ## Workflow Documentation
 
-**CRITICAL: After completing UX research, document in `.claude/workflow/`**
+**If a record of the UX research is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-ux-researcher-[research-description].md`
 

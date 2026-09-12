@@ -307,7 +307,7 @@ backend/
 
 ## Workflow Documentation
 
-**CRITICAL: After problem isolation, document in `.claude/workflow/`**
+**If a record of the problem isolation is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-problem-isolator-[isolation-description].md`
 

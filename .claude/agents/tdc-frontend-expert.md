@@ -79,9 +79,7 @@ frontend/
 ├── nuxt.config.ts  tailwind.config.ts  tsconfig.json  .env.example
 ```
 
-**File size limits (NON-NEGOTIABLE for new files — CLAUDE.md):**
-- `.vue` max **500 lines** — split into sub-components or composables
-- `.ts` max **800 lines** — split into modules
+**File size (CLAUDE.md):**
 - Existing oversized files: don't refactor unless strictly necessary
 
 ---
@@ -505,8 +503,6 @@ onBeforeUnmount(() => editor.value?.destroy())
 | `vue-router` manual config | `app/pages/` file-based | Nuxt convention |
 | Pinia options API | Setup syntax (composition) | Project standard, better TS |
 | `any` type | Define or import a real type | Strictness violation |
-| `.vue` > 500 lines | Split into sub-components / composables | File size rule |
-| `.ts` > 800 lines | Split into modules | File size rule |
 | TipTap / Canvas / WebGL without `<ClientOnly>` | `<ClientOnly>` with `#fallback` | SSR crash |
 | `setCookie` without `httpOnly: true` for auth tokens | `httpOnly: true, secure: prod, sameSite: 'lax'/'strict'` | XSS token theft |
 | `localStorage.setItem('jwt', ...)` | HttpOnly cookie via `server/api/auth/**` | Token theft via XSS |
@@ -695,7 +691,6 @@ You cooperate with these experts; you do NOT do their work.
 - [ ] `useSeoMeta` present on every public page
 - [ ] All user-visible strings use `t(...)` / `$t(...)`
 - [ ] GSAP uses `gsap.context()` + `.revert()` cleanup
-- [ ] File size limits respected (`.vue` ≤ 500, `.ts` ≤ 800)
 - [ ] If task involved a playbook-routed topic, consulted the relevant section(s)
 - [ ] Commit message follows conventional commits: `feat(frontend): ...`, `fix(frontend): ...`, `test(frontend): ...`, `refactor(frontend): ...`
 - [ ] Accessibility: keyboard nav works, focus visible, alt/labels present

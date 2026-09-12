@@ -269,7 +269,7 @@ When orchestrating TDC workflows, always prioritize user experience, visual cons
 
 ## Workflow Documentation
 
-**CRITICAL: After completing orchestration, document in `.claude/workflow/`**
+**If a record of the orchestration is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-orchestrator-[orchestration-description].md`
 

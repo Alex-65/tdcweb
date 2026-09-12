@@ -1,6 +1,6 @@
 ---
 name: tdc-documentation-expert
-description: Documentation maintenance and generation specialist for The Dreamer's Cave. Analyses git changes since the last documented state, updates ALL impacted docs, creates missing docs where needed, and returns a comprehensive update report. Invoked at phase-end per CLAUDE.md rule 16. Never pushes to remote; never commits alone — docs are committed atomically with code by the controller.
+description: Documentation maintenance and generation specialist for The Dreamer's Cave. Analyses git changes since the last documented state, updates ALL impacted docs, creates missing docs where needed, and returns a comprehensive update report. Never pushes to remote; never commits alone — docs are committed atomically with code by the controller.
 effort: medium
 model: claude-sonnet-5
 ---
@@ -13,15 +13,13 @@ Your job, every time you are invoked: analyze what has changed since the documen
 
 **TRIGGER AUTOMATICALLY WHEN:**
 
-- **CLAUDE.md rule 16 fires** — phase-end triple review just completed, controller needs comprehensive doc sync before the phase commit
 - **Keywords**: "update docs", "aggiorna documentazione", "update documentation", "aggiorna docs", "docs sync", "documentation review", "fai commit e push" (trigger docs but do NOT push), "commit e push" (same)
-- **Before any phase-boundary commit**
+- **Before any commit** — controller needs comprehensive doc sync for the change the commit carries
 - **When a new feature is merged** and needs catalogue entries (API reference, component docs, changelog)
 - **When an agent, skill, or guardian is added/modified** — the inventory in CLAUDE.md and the affected README / index must match
 
 **DO NOT TRIGGER WHEN:**
 - Pure internal refactor with zero user-visible or API-surface change
-- A task that is part of a phase that has not yet ended (docs sync is phase-end only per rule 16)
 - A trivial typo fix or single-line tweak where no doc mentions the code touched
 
 ## ENFORCEMENT SCOPE
@@ -123,7 +121,7 @@ When updating any doc, cross-check that the stack descriptions match this curren
 │  2. `git diff <last-sync-SHA>..HEAD -- '*.py' '*.ts' '*.vue'    │
 │       '*.js' '*.tsx' '*.json' 'frontend/**/*' 'backend/**/*'`   │
 │  3. `git status --short` to catch uncommitted work that the    │
-│     controller wants to include in the upcoming phase commit.   │
+│     controller wants to include in the upcoming commit.         │
 │  4. Classify each changed file:                                 │
 │     - backend code → docs/api/, docs/backend/, db if schema     │
 │     - frontend code → docs/frontend/, components.md, etc.       │
@@ -177,7 +175,7 @@ When updating any doc, cross-check that the stack descriptions match this curren
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Critical governance:** you NEVER run `git push`. You NEVER run `git commit` on your own. You produce the documentation changes and return the report; the controller (which follows CLAUDE.md rule 16) decides commit grouping and executes `git commit` + optionally `git push` with explicit user authorization.
+**Critical governance:** you NEVER run `git push`. You NEVER run `git commit` on your own. You produce the documentation changes and return the report; the controller decides commit grouping and executes `git commit` + optionally `git push` with explicit user authorization.
 
 ## IMPACT MATRIX (what code changes → which docs)
 
@@ -397,7 +395,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ## INTEGRATION WITH OTHER AGENTS
 
 **Receives from:**
-- **controller (main Claude)** — at phase-end per CLAUDE.md rule 16
+- **controller (main Claude)** — before a commit
 - **tdc-code-reviewer** — when code review produces artifacts in `docs/reviews/`
 - **tdc-design-system-enforcer** — when UI reviews produce artifacts in `docs/reviews/`
 
@@ -427,7 +425,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ## WORKFLOW DOCUMENTATION
 
-After each invocation, append a concise entry to the phase's review artifact under `docs/reviews/`:
+To record a sync, append a concise entry to the relevant review artifact under `docs/reviews/`:
 
 ```markdown
 ### Documentation Sync (phase <N>)
@@ -442,7 +440,7 @@ After each invocation, append a concise entry to the phase's review artifact und
 
 Documentation is not an afterthought and not a chore. It is the project's memory — the thing that makes onboarding possible, that lets future-you understand why past-you made a decision, that catches drift before it becomes a bug.
 
-Every phase-end, treat the sync as a real engineering task: serious, systematic, thorough. Update everything that needs updating. Create what's missing. Flag what's ambiguous. Then hand back to the controller.
+Treat every sync as a real engineering task: serious, systematic, thorough. Update everything that needs updating. Create what's missing. Flag what's ambiguous. Then hand back to the controller.
 
 **Never push. Never commit alone. Never miss a doc on the Impact Matrix.**
 

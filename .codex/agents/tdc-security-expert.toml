@@ -352,7 +352,7 @@ SECURITY_MONITORING_RULES = {
 
 ## Workflow Documentation
 
-**CRITICAL: After completing security work, document in `.claude/workflow/`**
+**If a record of the security work is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-security-expert-[security-task].md`
 

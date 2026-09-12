@@ -2,12 +2,12 @@
 
 ## 🔴 NEVER IGNORE - CORE RULES (ALWAYS ACTIVE)
 1. **DEBUG FIRST, CODE NEVER** → Add console.log/logger debug EVERYWHERE before any fix. Read logs. Understand problem with PROOF. Only then fix. ZERO trial-and-error.
-2. **MUST use subagents for complex work** (2+ files = expert, unclear = problem-isolator)
+2. **MUST use subagents for complex work** (unclear = problem-isolator)
 3. **Domain experts mandatory**: Database→database-expert, Vue→frontend-expert, Flask→backend-expert
 4. **Problem unclear?** → problem-isolator FIRST, never guess or explore alone
 5. **PREFER EXPERT DIRETTI over orchestrator** → Use specific domain experts directly for transparency. Orchestrator only for 10+ parallel agents or complex decision trees. Multi-phase sequential workflows = call experts directly, one per phase.
 6. **Zero superficiality** → Complete understanding BEFORE any modification
-7. **File size limits**: NEW files must respect limits (.vue ≤500, .py ≤1000, .ts ≤800), existing large files = do NOT refactor unless absolutely necessary
+7. **File size limits**: existing large files = do NOT refactor unless absolutely necessary
 8. **Fix-Test-Verify**: Find bug → Apply fix → TEST IMMEDIATELY → Only continue if problem persists
 9. **ABSOLUTELY FORBIDDEN: Batch file modifications** → NEVER use scripts or batch commands to modify multiple files. Each file modification MUST be done individually, manually, with explicit user visibility
 10. **TEST BEFORE DECLARING DONE** → NEVER say a modification is complete without running tests that prove it works
@@ -15,11 +15,11 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
-15. **SUBAGENT TASK WORKFLOW (no-commit model)** → After EACH subagent task: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides); (c) dispatch **`tdc-code-reviewer`** for spec + code quality review; (d) if the task modified UI, ALSO dispatch **`tdc-design-system-enforcer`** for visual compliance; (e) report results; (f) **STOP and wait for user checkpoint** before dispatching next task. **NO COMMITS at task level** — code accumulates in the working tree until phase end (rule 16). Implementer subagents must NOT commit; controller handles commits at phase boundary. This aligns with the user's practice of committing only when documentation is simultaneously updated.
-16. **PHASE-END COMMIT PROTOCOL** → At the end of EACH phase, in order: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **triple review** — dispatch `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **dispatch `tdc-documentation-expert`** to analyze the phase's git diff and update ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Pre-implementation counterpart:** `tdc-design-enforcer` blocks any phase/task from starting without an approved spec under `docs/superpowers/specs/`.
+15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-system-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of committing only when documentation is simultaneously updated.
+16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`** analyzes the git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Design specs:** `tdc-design-enforcer` owns approved specs under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
-18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during phase-end triple review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
-19. **USER INTENT CODIFICATION** → Reviewers check the implementation against what is **formally documented** in `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/plans/pdp-v3.md` — they do NOT infer requirements from conversation history. Therefore: BEFORE the phase-end triple review (rule 16 step a), the controller MUST scan the session conversation for user decisions / requests / scope changes that have NOT yet been codified in the plan. For each such item: (a) update the plan task list with an explicit task for the current or a future phase; or (b) explicitly defer with a rationale, logged as a TECH_DEBT entry with a resolution trigger; or (c) fold it into the current phase's commit scope if it's small and timely. Save the scan artifact as `docs/reviews/YYYY-MM-DD-user-intent-scan-phase-<N>.md` with the mapping table (user decision → codification artifact). This closes the gap whereby a user decision made in conversation but never written to the plan would go unverified at review time.
+18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
+19. **USER INTENT CODIFICATION** → Reviewers check the implementation against what is **formally documented** in `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/plans/pdp-v3.md` — they do NOT infer requirements from conversation history. Therefore: before a review (rule 16 step a0), the controller scans the session conversation for user decisions / requests / scope changes that have NOT yet been codified in the plan. For each such item: (a) update the plan task list with an explicit task for the current or a future phase; or (b) explicitly defer with a rationale, logged as a TECH_DEBT entry with a resolution trigger; or (c) fold it into the current phase's commit scope if it's small and timely. Save the scan artifact as `docs/reviews/YYYY-MM-DD-user-intent-scan-phase-<N>.md` with the mapping table (user decision → codification artifact). This closes the gap whereby a user decision made in conversation but never written to the plan would go unverified at review time.
 
 ---
 
@@ -90,11 +90,11 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 **IRON RULE**: *If you haven't seen debug output proving what's wrong, you don't know what's wrong. PERIOD.*
 
-## 📋 SUBAGENT-DRIVEN IMPLEMENTATION WORKFLOW - MANDATORY
+## 📋 SUBAGENT-DRIVEN IMPLEMENTATION WORKFLOW
 
-**🔴 When implementing any plan in subagent-driven mode, this is the non-negotiable protocol.**
+**`~/.canon/CANON.md` governs when review happens, when a commit is made and when work stops for the user. The boxes below keep the TDC test, review, cleanup and documentation surfaces.**
 
-### Per-task loop (no commits)
+### Per-task checks
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -116,20 +116,12 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │     ├─ Unit tests for pure logic                                 │
 │     ├─ Integration tests for cross-layer code                    │
 │                                                                  │
-│  5. DISPATCH tdc-code-reviewer (and tdc-design-system-enforcer   │
+│  5. WHEN DUE, tdc-code-reviewer (and tdc-design-system-enforcer  │
 │     if UI changes). Fix issues before proceeding.                │
-│                                                                  │
-│  6. CHECKPOINT                                                   │
-│     ├─ Report: what was done, tests run, tests created, diffs,  │
-│     │         review verdicts                                    │
-│     └─ STOP — wait for user approval to proceed to next task    │
-│                                                                  │
-│  Code remains uncommitted in the working tree. Commits happen   │
-│  only at phase end (rule 16).                                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Per-phase commit protocol (at the end of every phase)
+### Review, real tests, cleanup, docs and commit
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -164,13 +156,8 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │  F. ATOMIC COMMIT(S)                                             │
 │     ├─ Code + docs committed together                            │
 │     ├─ One commit, or a small set of logically-grouped commits   │
-│     ├─ NEVER docs-only or code-only commits at phase boundary    │
+│     ├─ NEVER docs-only or code-only commits                      │
 │     └─ Commit message references spec + plan + SHA range         │
-│                                                                  │
-│  G. PHASE CHECKPOINT                                             │
-│     ├─ Report all reviews + real test results + cleanup +        │
-│     │   docs sync + commit SHAs                                  │
-│     └─ STOP — wait for user approval before next phase           │
 │                                                                  │
 │  Push to remote happens ONLY with explicit user authorization,   │
 │  never automatically.                                            │
@@ -179,12 +166,12 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 ### Hard rules
 
-- **Never skip steps 3-5** of the per-task loop. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
-- **Never skip the phase-end review + docs sync**. "The code looks fine" is not a substitute.
-- **Tests come WITH the code**. They land in the same phase-end commit as the feature they cover. No "I'll write tests later".
+- **Never skip steps 3-4** of the per-task checks. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
+- **Never skip a due review or the docs sync**. "The code looks fine" is not a substitute.
+- **Tests come WITH the code**. They land in the same commit as the feature they cover. No "I'll write tests later".
 - **DB/filesystem state after tests = DB/filesystem state before tests.** Always. This is enforced, not aspirational.
-- **Docs land WITH code at phase end.** There are no docs-only commits at phase boundary. If docs drift during a phase, it's caught and corrected by `tdc-documentation-expert` before the phase commit.
-- **No per-task commits.** Subagents produce code + tests in the working tree; the controller commits only at phase boundary. Aligns with the user's practice of committing only alongside documentation updates.
+- **Docs land WITH code.** If docs drift, it's caught and corrected by `tdc-documentation-expert` before the commit.
+- **Subagents do not commit.** Subagents produce code + tests in the working tree; the controller commits. Aligns with the user's practice of committing only alongside documentation updates.
 - **Push is always explicit.** `tdc-documentation-expert` and every other agent never push. Pushes happen only when the user explicitly authorizes each one.
 - **Possible additional review post-phase**: the user may request an extra review at some point after the phase closes. Treat it as a normal ad-hoc deliverable when it comes.
 
@@ -237,7 +224,6 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 - **Conflicting approaches** → Multiple advisory agents in parallel
 
 ### ⚖️ NON-NEGOTIABLE DECISION RULES:
-- **2+ files to modify** → MUST use relevant expert
 - **Don't know where to start** → MUST use `tdc-problem-isolator`
 - **Multiple domains involved** → Call specific experts directly (NOT orchestrator)
 - **Unsure about approach** → MUST use advisory system
@@ -332,11 +318,11 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **tdc-troubleshooting-expert**: Debugging, log analysis
 - **tdc-problem-isolator**: Problem mapping and scope isolation
 
-### 🛡️ Review Guardians (3)
-**Mandatory review gates. Invoked via CLAUDE.md rules 15 and 16.**
-- **tdc-design-enforcer**: Pre-implementation gate. Requires approved spec at `docs/superpowers/specs/*-design.md` BEFORE any code is written. Integrates with `superpowers:brainstorming` + `superpowers:writing-plans`.
-- **tdc-code-reviewer**: Post-implementation two-phase review. Phase 1 spec compliance, Phase 2 code quality + security + TDC conventions + verification evidence. Blocks merge.
-- **tdc-design-system-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens). Blocks UI merge.
+### 🛡️ Review & Design Specialists (3)
+**`~/.canon/CANON.md` governs when review happens.**
+- **tdc-design-enforcer**: Design specs. Produces approved specs at `docs/superpowers/specs/*-design.md` for features that need a design. Integrates with `superpowers:brainstorming` + `superpowers:writing-plans`.
+- **tdc-code-reviewer**: Post-implementation two-phase review. Phase 1 spec compliance, Phase 2 code quality + security + TDC conventions + verification evidence.
+- **tdc-design-system-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens).
 
 ### 🧠 Coordination (2)
 - **tdc-orchestrator**: Master coordinator for complex workflows
@@ -442,11 +428,6 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **REFACTORING = STRUCTURE ONLY** - move code, split components, organize logic
 
 ## 📏 FILE SIZE LIMITS - PRAGMATIC APPROACH
-**🔴 MANDATORY for NEW files: Split when they exceed these thresholds**
-- **Vue.js components** (.vue): MAX 500 lines - split into sub-components or composables
-- **Python files** (.py): MAX 1000 lines - split into modules or separate classes
-- **TypeScript files** (.ts): MAX 800 lines - split into modules or separate services
-
 **🟡 EXISTING large files: Pragmatic survival rules**
 - **DO NOT refactor** existing large files unless absolutely necessary
 - **Small modifications** on large files are acceptable without refactoring
@@ -459,7 +440,8 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **⛔ AVOID**: MCP filesystem tools for content changes
 - **✅ MCP FILESYSTEM OK for**: Directory listing, file info, search operations only
 
-## 📚 DOCUMENTATION UPDATE MANDATORY WORKFLOW
+## 📚 DOCUMENTATION UPDATE WORKFLOW
+**`~/.canon/CANON.md` §Commit owns when documentation is updated and how it lands with the change.**
 **🔴 AUTOMATIC TRIGGER: When user requests documentation updates, commits, or pushes**
 
 **Trigger Phrases** (auto-detect):
@@ -468,11 +450,8 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - "commit and push" / "fai commit e push"
 - Any phrase combining documentation + commit/push
 
-**MANDATORY WORKFLOW**:
+**WORKFLOW**:
 1. **🤖 AUTO-LAUNCH tdc-documentation-expert agent**
-2. **🔴 CRITICAL: SINGLE COMMIT REQUIREMENT**
-   - **ONE ATOMIC COMMIT** with comprehensive message
-   - **NO separate documentation-only commits**
 
 ## 📂 PROJECT STRUCTURE
 

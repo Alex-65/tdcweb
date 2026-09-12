@@ -454,7 +454,7 @@ def alert_network_issues(metrics):
 
 ## Workflow Documentation
 
-**CRITICAL: After completing network optimization, document in `.claude/workflow/`**
+**If a record of the network optimization is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-network-expert-[task-description].md`
 

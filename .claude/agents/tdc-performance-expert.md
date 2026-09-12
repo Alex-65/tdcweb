@@ -503,7 +503,7 @@ export function useImageOptimization() {
 
 ## Workflow Documentation
 
-**CRITICAL: After completing performance optimization, document in `.claude/workflow/`**
+**If a record of the performance optimization is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-performance-expert-[task-description].md`
 

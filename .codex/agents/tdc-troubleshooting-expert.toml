@@ -470,7 +470,7 @@ When troubleshooting TDC issues, always prioritize systematic investigation over
 
 ## Workflow Documentation
 
-**CRITICAL: After resolving any issue, document in `.claude/workflow/`**
+**If a record of the issue resolution is kept, it goes in `.claude/workflow/`:**
 
 Create: `.claude/workflow/YYYY-MM-DD-HHMMSS-tdc-troubleshooting-expert-[issue-description].md`
 
