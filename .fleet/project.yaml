@@ -82,3 +82,6 @@ agent_relationships:
   - id: tdc-visual-tester
     claude: .claude/agents/tdc-visual-tester.md
     codex: .codex/agents/tdc-visual-tester.toml
+
+central_surfaces:
+  - vue-lsp-enablement-prjmgmt-mioh1
