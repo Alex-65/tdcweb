@@ -1,0 +1,77 @@
+[Unit]
+# TDC Flask 3 backend (Phase 6).
+#
+# Runs the Flask app under gunicorn on 127.0.0.1:9500. Apache forwards
+# /api/** (other than /api/auth/** and /api/revalidate, which go to
+# Nuxt) to this port. The Nuxt SSR process also calls this directly via
+# flaskFetch (server-side BFF round-trips).
+#
+# Required env vars (set in /etc/tdcweb/backend.env -- NOT committed):
+#   FLASK_ENV               production
+#   SECRET_KEY              <random 32+ chars>  Flask session/CSRF
+#   JWT_SECRET_KEY          <random 32+ chars>  JWT HS256 signing key
+#   DB_HOST                 localhost
+#   DB_NAME                 tdcweb
+#   DB_USER                 tdcweb
+#   DB_PASSWORD             <real prod password>
+#   DB_POOL_SIZE            20
+#   REDIS_URL               redis://localhost:6379/0
+#   MAIL_SERVER, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD, MAIL_USE_TLS
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (and Discord/Facebook/Patreon
+#   keys per Config base class)
+#
+# Phase 4 holistic-review hard requirement: SECRET_KEY and JWT_SECRET_KEY
+# MUST be set; ProductionConfig at backend/app/config.py raises KeyError
+# at import if missing (no fallback). A boot without those vars will fail
+# loud rather than silently inherit the public dev placeholders.
+
+Description=TDC Flask 3 backend (gunicorn on :9500)
+Documentation=file:///data1/tdcweb/docs/deployment/production.md
+After=network-online.target mysql.service redis-server.service
+Wants=network-online.target
+Requires=mysql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/data1/tdcweb/backend
+
+# Production env file. NOT in the repo. Owned by root, mode 0640,
+# group www-data so the systemd service can read it.
+EnvironmentFile=/etc/tdcweb/backend.env
+
+# venv-resident gunicorn, not the system one (versions differ).
+ExecStart=/data1/tdcweb/backend/venv/bin/gunicorn \
+    --workers 4 \
+    --worker-class gthread \
+    --threads 8 \
+    --bind 127.0.0.1:9500 \
+    --access-logfile - \
+    --error-logfile - \
+    --capture-output \
+    --timeout 60 \
+    --graceful-timeout 30 \
+    "app:create_app()"
+
+ExecReload=/bin/kill -s HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5
+
+LimitNOFILE=65536
+TasksMax=2048
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tdcweb-backend
+
+# Hardening.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/data1/tdcweb/backend /data1/tdcweb/uploads
+
+[Install]
+WantedBy=multi-user.target

@@ -85,10 +85,21 @@ class DevelopmentConfig(Config):
 
 
 class ProductionConfig(Config):
-    """Production configuration."""
+    """Production configuration.
+
+    Hard requirement: SECRET_KEY and JWT_SECRET_KEY MUST come from the
+    environment, with no fallback. The base Config provides dev placeholders
+    so local boots and pytest do not need real secrets, but a prod boot with
+    those placeholders would let anyone who can read this file mint admin
+    JWTs (the placeholder string is public). We re-read the env here without
+    a default so a missing var raises KeyError at module import / app boot
+    rather than silently inheriting the dev placeholder.
+    """
 
     DEBUG = False
     TESTING = False
+    SECRET_KEY = os.environ['SECRET_KEY']
+    JWT_SECRET_KEY = os.environ['JWT_SECRET_KEY']
 
 
 class TestingConfig(Config):
