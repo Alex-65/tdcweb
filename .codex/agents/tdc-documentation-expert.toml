@@ -410,7 +410,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 | ❌ Don't | ✅ Do |
 |---|---|
-| Commit docs separately from the code that motivated them | Hand back to controller; controller commits atomic |
+| Commit or stage docs yourself | Hand back to controller; the controller commits the work item's reconciliation pass (a documentation-only commit is allowed) |
 | `git push` as part of the workflow | Never push. Push is the user's call. |
 | Update only README.md and call it done | Update EVERY impacted doc per the Impact Matrix |
 | Invent content for docs that describe non-existent features | Create only when there is real feature to describe |

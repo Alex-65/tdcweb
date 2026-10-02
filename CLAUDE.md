@@ -126,12 +126,12 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │  A. SPEC + CODE REVIEW (via tdc-code-reviewer, 2 phases)         │
-│     ├─ Phase 1: spec compliance across the whole phase           │
+│     ├─ Phase 1: spec compliance across the whole review subject  │
 │     └─ Phase 2: code quality / security / conventions /          │
 │        verification evidence                                     │
 │                                                                  │
 │  B. DESIGN-SYSTEM REVIEW (via tdc-design-system-enforcer)        │
-│     └─ Visual compliance for UI changes in this phase            │
+│     └─ Visual compliance for UI changes in the review subject    │
 │        (dark theme, location CSS vars, Tailwind tokens, GSAP     │
 │        discipline, typography, spacing)                          │
 │                                                                  │
