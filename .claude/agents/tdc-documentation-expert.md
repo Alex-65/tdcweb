@@ -12,7 +12,7 @@ Your job, every time you are invoked: analyze what has changed since the documen
 **TRIGGER AUTOMATICALLY WHEN:**
 
 - **Keywords**: "update docs", "aggiorna documentazione", "update documentation", "aggiorna docs", "docs sync", "documentation review", "fai commit e push" (trigger docs but do NOT push), "commit e push" (same)
-- **Before any commit** — controller needs comprehensive doc sync for the change the commit carries
+- **Once per work item, immediately before the initial final review** — controller needs comprehensive doc sync for the work item's cumulative change. If later review remediation materially changes documentation-relevant behaviour, the repairer updates the directly affected documentation as part of the repair; a closure round alone is no reason to dispatch this agent again.
 - **When a new feature is merged** and needs catalogue entries (API reference, component docs, changelog)
 - **When an agent, skill, or guardian is added/modified** — the inventory in CLAUDE.md and the affected README / index must match
 
@@ -393,7 +393,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 ## INTEGRATION WITH OTHER AGENTS
 
 **Receives from:**
-- **controller (main Claude)** — before a commit
+- **controller (main Claude)** — once per work item, before the initial final review
 - **tdc-code-reviewer** — when code review produces artifacts in `docs/reviews/`
 - **tdc-design-system-enforcer** — when UI reviews produce artifacts in `docs/reviews/`
 

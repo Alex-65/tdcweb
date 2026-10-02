@@ -2,8 +2,8 @@
 
 ## 🔴 NEVER IGNORE - CORE RULES (ALWAYS ACTIVE)
 1. **DEBUG FIRST, CODE NEVER** → Add console.log/logger debug EVERYWHERE before any fix. Read logs. Understand problem with PROOF. Only then fix. ZERO trial-and-error.
-2. **MUST use subagents for complex work** (unclear = problem-isolator)
-3. **Domain experts mandatory**: Database→database-expert, Vue→frontend-expert, Flask→backend-expert
+2. **Use subagents for complex work where delegation buys specialist capability, independent work or reasoning you do not already have** (unclear = problem-isolator); a bounded edit you already understand you make directly
+3. **Domain experts where they add capability**: Database→database-expert, Vue→frontend-expert, Flask→backend-expert — not for a bounded edit you already understand
 4. **Problem unclear?** → problem-isolator FIRST, never guess or explore alone
 5. **PREFER EXPERT DIRETTI over orchestrator** → Use specific domain experts directly for transparency. Orchestrator only for 10+ parallel agents or complex decision trees. Multi-phase sequential workflows = call experts directly, one per phase.
 6. **Zero superficiality** → Complete understanding BEFORE any modification
@@ -15,7 +15,7 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
-15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run ALL tests (backend pytest + frontend vitest + integration where relevant); (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-system-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of committing only when documentation is simultaneously updated.
+15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run the minimum verification sufficient to prove the changed property (backend pytest + frontend vitest + integration where relevant), widened only where a shared contract or an uncertain reach requires it, reusing evidence that is still valid instead of re-running it; (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-system-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of committing only when documentation is simultaneously updated.
 16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`** analyzes the git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed together in one or a few logically-grouped commits, never docs-only commits. **Design specs:** `tdc-design-enforcer` owns approved specs under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
@@ -106,9 +106,9 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │     └─ produces code + tests per the task's step list            │
 │     └─ does NOT run `git commit`                                 │
 │                                                                  │
-│  3. RUN ALL TESTS                                                │
-│     ├─ Backend:  pytest (all markers, respecting fixtures)      │
-│     ├─ Frontend: npm test (vitest, all spec files)              │
+│  3. RUN THE MINIMUM SUFFICIENT TESTS (reuse valid evidence)      │
+│     ├─ Backend:  pytest covering the changed surface             │
+│     ├─ Frontend: vitest covering the changed surface             │
 │     └─ Integration: if the task touches a boundary              │
 │                                                                  │
 │  4. CREATE MISSING TESTS                                         │
@@ -166,11 +166,11 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 ### Hard rules
 
-- **Never skip steps 3-4** of the per-task checks. Not even on "trivial" tasks. If a task seems too small for tests, the task was scoped wrong — split it.
+- **Never skip steps 3-4** of the per-task checks for a task that changes code. Step 3 is the minimum verification sufficient to prove the changed property, widened only where a shared contract or an uncertain reach requires it; evidence that is still valid is reused, not re-run.
 - **Never skip a due review or the docs sync**. "The code looks fine" is not a substitute.
 - **Tests come WITH the code**. They land in the same commit as the feature they cover. No "I'll write tests later".
 - **DB/filesystem state after tests = DB/filesystem state before tests.** Always. This is enforced, not aspirational.
-- **Docs land WITH code.** If docs drift, it's caught and corrected by `tdc-documentation-expert` before the commit.
+- **Docs land WITH code.** If docs drift, it's caught and corrected by `tdc-documentation-expert` in the work item's single documentation reconciliation pass, immediately before the initial final review; a later review repair that materially changes documentation-relevant behaviour updates the directly affected docs itself.
 - **Subagents do not commit.** Subagents produce code + tests in the working tree; the controller commits. Aligns with the user's practice of committing only alongside documentation updates.
 - **Push is always explicit.** `tdc-documentation-expert` and every other agent never push. Pushes happen only when the user explicitly authorizes each one.
 - **Possible additional review post-phase**: the user may request an extra review at some point after the phase closes. Treat it as a normal ad-hoc deliverable when it comes.
@@ -191,9 +191,9 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 **IRON RULE**: *One fix at a time. Test before proceeding. Never continue blindly after a fix.*
 
-## 🔴 MANDATORY SUBAGENT USAGE - ZERO TOLERANCE
+## 🔴 SUBAGENT USAGE
 
-**Claude MUST PROACTIVELY use subagents - NO EXCEPTIONS**
+**Claude PROACTIVELY uses subagents where delegation buys specialist capability, independent work or reasoning it does not already have. Every trigger below applies on that condition: a bounded edit Claude already understands it makes directly.**
 
 ### 🚨 MANDATORY TRIGGERS (MUST use subagent IMMEDIATELY):
 
@@ -229,7 +229,7 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 - **Unsure about approach** → MUST use advisory system
 - **"This is complex"** → STOP. MUST use subagent.
 
-**ABSOLUTELY FORBIDDEN**: Doing complex work directly without consulting relevant experts first.
+**ABSOLUTELY FORBIDDEN**: Doing complex work directly without consulting relevant experts first. A bounded edit you already understand is not such work.
 
 ### 🎯 ORCHESTRATOR vs EXPERT DIRETTI - CRITICAL CHOICE
 
