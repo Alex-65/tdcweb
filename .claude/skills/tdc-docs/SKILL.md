@@ -39,36 +39,43 @@ tdcweb/
 │   │   └── tasks/        # Celery async tasks
 │   ├── migrations/
 │   └── tests/
-├── frontend/             # Vue.js 3 SPA
-│   ├── src/
-│   │   ├── components/   # Vue components by domain
-│   │   ├── composables/  # Composition API hooks
-│   │   ├── stores/       # Pinia stores
-│   │   ├── views/        # Page components
-│   │   ├── router/       # Vue Router config
-│   │   ├── i18n/         # Translations (en, it, fr, es)
-│   │   └── styles/       # Tailwind + location themes
-│   └── public/
-├── nginx/                # Server config
+├── frontend/             # Nuxt 4 (Vue 3 + TypeScript strict)
+│   ├── app/              # Nuxt 4 app/ layer
+│   │   ├── pages/        # File-based routes (SSG/ISR/SSR/SPA per routeRules)
+│   │   ├── components/   # Vue components, flat naming via pathPrefix:false
+│   │   ├── composables/  # useApiFetch, useAuth, useScrollAnimation, ...
+│   │   ├── middleware/   # auth, admin, staff route guards
+│   │   ├── utils/        # Pure helpers (auth-guard, etc.)
+│   │   ├── plugins/      # gsap.client.ts, lenis.client.ts (client-only)
+│   │   ├── stores/       # Pinia setup-syntax stores
+│   │   ├── types/        # Shared TS types (api, user, location, event)
+│   │   └── assets/css/   # Tailwind v4 + @theme + per-location vars
+│   ├── server/           # Nitro BFF (auth handlers, revalidate, flaskFetch)
+│   ├── i18n/locales/     # JSON: en.json, it.json, fr.json, es.json
+│   └── tests/            # vitest + Playwright
+├── apache/               # Production Apache vhost (Phase 6)
+├── deploy/systemd/       # Production systemd units (Phase 6)
 └── docs/                 # Documentation
 ```
 
 ### Tech Stack
 
 **Backend:**
-- Python 3.11+ / Flask
+- Python 3.11+ / Flask 3
 - MySQL 8.x with mysql-connector-python (NO SQLAlchemy)
 - Celery + Redis (async tasks)
-- JWT + OAuth (Google, Discord, Facebook)
+- JWT (PyJWT) + bcrypt + OAuth (Google, Discord, Facebook)
 
 **Frontend:**
-- Vue.js 3 (Composition API)
-- Vite (build tool)
-- Tailwind CSS (utility-first)
-- GSAP + ScrollTrigger + Lenis (Apple-style animations)
-- Pinia (state management)
-- Vue I18n (multilingual: EN, IT, FR, ES)
-- TipTap (WYSIWYG editor)
+- Nuxt 4 (Vue 3 Composition API + TypeScript strict)
+- Vite (under Nuxt)
+- Tailwind CSS v4 (CSS-first @theme config) + per-location CSS vars
+- GSAP + ScrollTrigger + Lenis (client-only, gsap.context+revert cleanup)
+- Pinia (`@pinia/nuxt`, setup-syntax stores)
+- @nuxtjs/i18n (`prefix_except_default` EN/IT/FR/ES)
+- @nuxtjs/seo + sitemap + robots (Schema.org JSON-LD via useSchemaOrg)
+- TipTap (admin-only, inside `<ClientOnly>`)
+- vee-validate + zod (type-safe validation)
 
 **External Integrations:**
 - Google Calendar (staff + public calendars)

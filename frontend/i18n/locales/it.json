@@ -1,0 +1,41 @@
+{
+  "nav": {
+    "locations": "Location",
+    "events": "Eventi",
+    "artists": "Artisti",
+    "blog": "Blog",
+    "login": "Accedi"
+  },
+  "home": {
+    "hero_title": "Puoi vedere la musica",
+    "hero_subtitle": "Un music club virtuale in Second Life",
+    "seo": {
+      "description": "Un music club virtuale in Second Life: 10 venue a tema, musica dal vivo, eventi immersivi.",
+      "og_description": "Music club virtuale in Second Life dal 2019"
+    }
+  },
+  "locations": {
+    "title": "Location",
+    "empty": "Nessuna location disponibile",
+    "seo": {
+      "description": "Scopri le 10 venue a tema del The Dreamer's Cave in Second Life."
+    },
+    "error": {
+      "load_failed": "Impossibile caricare le location"
+    }
+  },
+  "events": {
+    "title": "Eventi",
+    "empty": "Nessun evento in programma",
+    "seo": {
+      "description": "Eventi musicali dal vivo in programma al The Dreamer's Cave."
+    },
+    "error": {
+      "load_failed": "Impossibile caricare gli eventi"
+    }
+  },
+  "errors": {
+    "message_fallback": "Qualcosa è andato storto",
+    "back_to_home": "Torna alla home"
+  }
+}
