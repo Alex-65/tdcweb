@@ -564,7 +564,7 @@ npx playwright test --ui                         # interactive UI
 
 - **Rule 13**: Use `mcp__plugin_playwright_playwright__*` tools for browser testing when available.
 - **Rule 14**: Browser viewport ALWAYS 1920x1080.
-- **Rule 15**: After every subagent task, run the minimum sufficient tests (reusing valid evidence) + create missing tests + dispatch reviewers + STOP at checkpoint.
+- **Rule 15**: After every subagent task, run the minimum sufficient tests (reusing valid evidence) + create missing tests; reviewers when a review is due (`~/.canon/CANON.md` governs when).
 - **Rule 17**: Test state cleanup is mandatory. Pre-test state == post-test state. Always.
 - **No DB mocks** (project convention): backend tests run against real `tdcweb_test`. mysql-connector-python only.
 - **No `any` in tests**: use typed-globalThis declarations or proper interfaces. `as any` is a smell.
