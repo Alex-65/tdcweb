@@ -16,7 +16,7 @@
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
 15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run the minimum verification sufficient to prove the changed property (backend pytest + frontend vitest + integration where relevant), widened only where a shared contract or an uncertain reach requires it, reusing evidence that is still valid instead of re-running it; (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-system-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of reconciling documentation once per work item, not per commit.
-16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (Phase 1 spec compliance + Phase 2 code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`**, once per work item and BEFORE the initial final review in (a), analyzes the work item's cumulative git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed in one or a few logically-grouped commits; the docs come from the work item's single reconciliation pass, and a docs-only commit for that pass is allowed. **Design specs:** `tdc-design-enforcer` owns approved specs under `docs/superpowers/specs/`.
+16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user-intent scan per rule 19** — codify any uncoded user decisions into the plan BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (one review: requirement compliance and code quality) and `tdc-design-system-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`**, once per work item and BEFORE the initial final review in (a), analyzes the work item's cumulative git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed in one or a few logically-grouped commits; the docs come from the work item's single reconciliation pass, and a docs-only commit for that pass is allowed. **Design specs:** `tdc-design-enforcer` owns approved specs under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
 19. **USER INTENT CODIFICATION** → Reviewers check the implementation against what is **formally documented** in `docs/superpowers/specs/`, `docs/superpowers/plans/`, and `docs/plans/pdp-v3.md` — they do NOT infer requirements from conversation history. Therefore: before a review (rule 16 step a0), the controller scans the session conversation for user decisions / requests / scope changes that have NOT yet been codified in the plan. For each such item: (a) update the plan task list with an explicit task for the current or a future phase; or (b) explicitly defer with a rationale, logged as a TECH_DEBT entry with a resolution trigger; or (c) fold it into the current phase's commit scope if it's small and timely. Save the scan artifact as `docs/reviews/YYYY-MM-DD-user-intent-scan-phase-<N>.md` with the mapping table (user decision → codification artifact). This closes the gap whereby a user decision made in conversation but never written to the plan would go unverified at review time.
@@ -125,10 +125,10 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  A. SPEC + CODE REVIEW (via tdc-code-reviewer, 2 phases)         │
-│     ├─ Phase 1: spec compliance across the whole review subject  │
-│     └─ Phase 2: code quality / security / conventions /          │
-│        verification evidence                                     │
+│  A. CODE REVIEW (via tdc-code-reviewer, one review)              │
+│     └─ Requirement compliance and implementation quality         │
+│        (security / conventions / verification evidence) over     │
+│        the whole review subject                                  │
 │                                                                  │
 │  B. DESIGN-SYSTEM REVIEW (via tdc-design-system-enforcer)        │
 │     └─ Visual compliance for UI changes in the review subject    │
@@ -217,7 +217,7 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 **🔴 Claude MUST use coordinators for:**
 - **Testing strategy** → `tdc-testing-expert` (plans testing approach)
 - **Documentation updates** → `tdc-documentation-expert` (maintains docs)
-- **Complex workflows** → `tdc-orchestrator` (3+ agents needed)
+- **Complex workflows** → `tdc-orchestrator` (10+ agents in parallel; returns a dispatch plan, launches nothing)
 
 **🔴 Claude MUST use advisory system for:**
 - **Difficult decisions** → Advisory agents (architecture, security, risk, performance)
@@ -286,9 +286,9 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ```
 "Activate advisory system for [complex problem]"
 ```
-- 4 advisory agents analyze in parallel
-- Advisory coordinator synthesizes strategy
-- Go/no-go decision with clear roadmap
+- The session launches the advisory agents (in parallel when independent)
+- The advisory coordinator synthesizes the analyses the session returns
+- The operator takes the go/no-go decision
 
 **New Feature Planning:**
 ```
@@ -305,7 +305,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **tdc-documentation-expert**: Documentation maintenance
 
 ### 🧪 Testing & Quality (5)
-- **tdc-testing-expert**: Testing strategy coordinator (3+ agents needed)
+- **tdc-testing-expert**: Testing strategy planner; selects the proof and the testers, dispatches nothing
 - **tdc-visual-tester**: Visual regression, screenshot comparison, location themes
 - **tdc-e2e-tester**: End-to-end workflows, user journey testing
 - **tdc-browser-performance-tester**: Core Web Vitals, GSAP performance
@@ -322,11 +322,11 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ### 🛡️ Review & Design Specialists (3)
 **`~/.canon/CANON.md` governs when review happens.**
 - **tdc-design-enforcer**: Design specs. Produces approved specs at `docs/superpowers/specs/*-design.md` for features that need a design. Integrates with `superpowers:brainstorming` + `superpowers:writing-plans`.
-- **tdc-code-reviewer**: Post-implementation two-phase review. Phase 1 spec compliance, Phase 2 code quality + security + TDC conventions + verification evidence.
+- **tdc-code-reviewer**: The Claude review eye at a canon review point: one review covering requirement compliance and implementation quality (security, TDC conventions, verification evidence).
 - **tdc-design-system-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens).
 
 ### 🧠 Coordination (2)
-- **tdc-orchestrator**: Master coordinator for complex workflows
+- **tdc-orchestrator**: Planner for workflows needing 10+ parallel agents: returns a dispatch plan and per-specialist briefs for the calling session to launch; launches no agent
 - **tdc-problem-isolator**: Problem mapping and scope isolation
 
 ### ⚖️ Advisory System (5)
@@ -371,7 +371,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 | **Auth transport** | **JWT HttpOnly cookies** (`tdc_access` 15min Lax, `tdc_refresh` 7d Strict Path=/api/auth, rotated on use) |
 | **Auth emit** | Flask + JWT + OAuth2 (Google, Discord, Facebook) |
 | **BFF** | Nuxt `server/api/auth/**` + `server/api/revalidate` (auth cookie handling + on-demand ISR). All other `/api/**` proxy to Flask. |
-| **Task Queue** | Celery + Redis |
+| **Task Queue** | Celery + Redis (planned: declared in `requirements.txt` and `REDIS_URL`, no task code exists yet) |
 | **Testing** | vitest + `@nuxt/test-utils` + happy-dom (unit/component); Playwright (E2E, 1920x1080) |
 
 ### External Integrations
@@ -392,7 +392,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 | `/auth/login`, `/auth/register`, `/auth/callback/**` | **SSR** (no cache) | Dynamic per session |
 | `/dashboard/**`, `/admin/**` | **SPA** (`ssr: false`) | Auth-gated, no SEO value |
 | `/api/auth/**`, `/api/revalidate` | Nitro server routes (BFF) | Handled by Nuxt node |
-| `/api/**` (other) | Proxied to Flask | via Apache (prod, `mod_proxy_http`) or Nitro devProxy (dev) |
+| `/api/locations`, `/api/events`, `/api/health` (+ `/**`) | Proxied to Flask | via Apache (prod, `mod_proxy_http`) or the explicit `routeRules.proxy` entries in `nuxt.config.ts` (dev); there is no `/api/**` glob proxy |
 
 **On-demand revalidation**: admin save → client POSTs `/api/revalidate { path }` → Nitro clears cache for that path → next visitor gets fresh content.
 
@@ -448,7 +448,6 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 **Trigger Phrases** (auto-detect):
 - "update documentation" / "aggiorna documentazione"
 - "update docs" / "aggiorna docs"
-- Any phrase combining documentation + commit/push
 
 **WORKFLOW**:
 1. **🤖 AUTO-LAUNCH tdc-documentation-expert agent**
@@ -456,19 +455,15 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ## 📂 PROJECT STRUCTURE
 
 ```
-/data1/tdcweb/
+/data1/tdcweb-dev/ (dev checkout; production is /data1/tdcweb)
 ├── backend/                     # Flask REST API
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── config.py
 │   │   ├── models/              # MySQL table bindings
 │   │   ├── routes/
-│   │   │   ├── api/             # Public REST API (/api/*)
-│   │   │   └── admin/           # Admin-only endpoints
-│   │   ├── services/            # Business logic layer
-│   │   ├── utils/               # db.py, responses.py, decorators.py, validators.py
-│   │   └── tasks/               # Celery async tasks
-│   ├── migrations/
+│   │   │   └── api/             # Public REST API (/api/*): auth, events, health, locations
+│   │   └── utils/               # db.py, responses.py, auth_decorators.py, jwt_helpers.py, password.py
 │   └── tests/
 │
 ├── frontend/                    # Nuxt 4 + Vue 3 + TypeScript (strict)
@@ -509,6 +504,8 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 │       ├── specs/               # Phase-specific architectural specs
 │       └── plans/               # Phase-specific task-level plans
 │
+├── sql/                         # schema.sql, migrations/ (001_initial.sql, 002_add_geoip.sql)
+│
 ├── apache/                      # Production Apache vhost config (Phase 6)
 │
 ├── .claude/
@@ -523,43 +520,18 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 
 ## 🗄️ Database Configuration
 
-**Database Credentials:**
-- **Database**: `tdcweb`
-- **User**: `tdcweb`
-- **Password**: `tdcweb`
-- **Root Password**: `rutt1n0`
-- **Host**: `localhost`
-- **Port**: `3306`
+**Connection settings** are the `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` and `DB_POOL_SIZE` keys read by `backend/app/config.py` (`backend/.env` in development, `/etc/tdcweb/backend.env` in production). Their values are never written in this repository, in a document or in a report.
 
 **🔴 CRITICAL: NO SQLAlchemy - Use mysql-connector-python ONLY**
 
 ```python
-# utils/db.py pattern
-import mysql.connector
-from mysql.connector import pooling
+# backend/app/utils/db.py pattern: init_pool(app) builds the pool from the DB_* config keys
+# (pool_size from DB_POOL_SIZE); callers use get_cursor() / fetch_one()
+from app.utils.db import get_cursor
 
-connection_pool = pooling.MySQLConnectionPool(
-    pool_name="tdc_pool",
-    pool_size=20,
-    host="localhost",
-    database="tdcweb",
-    user="tdcweb",
-    password="tdcweb",
-    charset="utf8mb4",
-    collation="utf8mb4_unicode_ci"
-)
-
-def get_db():
-    return connection_pool.get_connection()
-
-def query_db(sql, params=None, one=False):
-    conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, params or ())
-    result = cursor.fetchone() if one else cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return result
+with get_cursor() as cursor:          # commits on success, rolls back on error
+    cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+    user = cursor.fetchone()
 ```
 
 ## 📌 MCP Server Infrastructure
@@ -725,8 +697,8 @@ Detailed patterns: `docs/frontend/nuxt-playbook.md` §§ 8–9.
 4. **Follow security practices**: OWASP guidelines, secure coding
 5. **Password hashing**: bcrypt with min 12 rounds
 6. **JWT tokens**: Short expiry (15 min access, 7 day refresh)
-7. **CSRF protection**: All forms protected
-8. **Rate limiting**: Auth endpoints protected
+7. **CSRF protection**: All forms protected (required; not implemented yet: cookies rely on SameSite only)
+8. **Rate limiting**: Auth endpoints protected (required; not implemented yet: no limiter exists)
 
 ## 🚀 Available Skills
 

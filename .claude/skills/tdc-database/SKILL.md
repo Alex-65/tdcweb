@@ -691,10 +691,10 @@ LIMIT 20;
 # ============================================
 
 # Connect as app user
-mysql -u tdcweb -ptdcweb tdcweb
+mysql -u tdcweb -p tdcweb
 
 # Connect as admin
-mysql -u admin -prutt1n0
+mysql -u admin -p
 
 # ============================================
 # Database Info
@@ -765,13 +765,13 @@ ANALYZE TABLE events;
 # ============================================
 
 # Export single table
-mysqldump -u tdcweb -ptdcweb tdcweb locations > locations.sql
+mysqldump -u tdcweb -p tdcweb locations > locations.sql
 
 # Export with data only (no schema)
-mysqldump -u tdcweb -ptdcweb tdcweb --no-create-info locations > locations_data.sql
+mysqldump -u tdcweb -p tdcweb --no-create-info locations > locations_data.sql
 
 # Import SQL file
-mysql -u tdcweb -ptdcweb tdcweb < locations.sql
+mysql -u tdcweb -p tdcweb < locations.sql
 
 # ============================================
 # JSON Operations
@@ -798,7 +798,7 @@ After any migration:
 1. **Update schema.sql** to reflect current state:
    ```bash
    # Generate fresh schema
-   mysqldump -u tdcweb -ptdcweb --no-data tdcweb > sql/schema.sql
+   mysqldump -u tdcweb -p --no-data tdcweb > sql/schema.sql
 
    # Or manually add the changes to schema.sql
    ```
@@ -808,16 +808,16 @@ After any migration:
 3. **Test migration** on a fresh database:
    ```bash
    # Create test database
-   mysql -u admin -prutt1n0 -e "CREATE DATABASE tdcweb_test;"
+   mysql -u admin -p -e "CREATE DATABASE tdcweb_test;"
 
    # Apply schema
-   mysql -u tdcweb -ptdcweb tdcweb_test < sql/schema.sql
+   mysql -u tdcweb -p tdcweb_test < sql/schema.sql
 
    # Verify
-   mysql -u tdcweb -ptdcweb tdcweb_test -e "SHOW TABLES;"
+   mysql -u tdcweb -p tdcweb_test -e "SHOW TABLES;"
 
    # Cleanup
-   mysql -u admin -prutt1n0 -e "DROP DATABASE tdcweb_test;"
+   mysql -u admin -p -e "DROP DATABASE tdcweb_test;"
    ```
 
 ### Phase 11: Git Workflow
