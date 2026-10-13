@@ -89,22 +89,25 @@ read-only to you. On native Claude dispatch this is enforced, not requested: the
 `.claude/hooks/review_eye_boundary.py`, bound in `.claude/settings.json`, classifies you by the
 `DOCUMENTATION-REVIEW-ROLE` line above, mints a private scratch root exported as
 `$REVIEW_EYE_SCRATCH`, runs your Bash under an operating-system write-allowlist of that root,
-and refuses `Write` and `Edit`. Your first command, and the first line of your report:
+and refuses `Write` and `Edit`. On the Claude harness your first command, and the first line of
+your report:
 
     echo "REVIEW-EYE-IDENTITY: ${REVIEW_EYE_ACTOR:?boundary absent} SCRATCH: ${REVIEW_EYE_SCRATCH:?boundary absent}"
 
-- If those variables are unset, no boundary was established: report `REVIEW NOT OBTAINED:
-  execution boundary absent` and stop.
-- If the boundary refuses Bash itself because this host offers no operating-system sandbox,
-  continue read-only with Read, Grep and Glob, and report every reproduction you could not run
-  as NOT RUN with that reason.
+- On the Claude harness, if those variables are unset, no boundary was established: report
+  `REVIEW NOT OBTAINED: execution boundary absent` and stop.
+- On the Claude harness, if the boundary refuses Bash itself because this host offers no
+  operating-system sandbox, continue read-only with Read, Grep and Glob, and report every
+  reproduction you could not run as NOT RUN with that reason.
+- On the Codex harness those variables are never exported and their absence is not a missing
+  boundary: the review dispatcher's disposable reviewer root is your scratch, and your first
+  line is `REVIEW-EYE-IDENTITY: <your agent name> SCRATCH: <that reviewer root>`.
 - Reproductions, probes and fixtures live only under your scratch root. A mutable copy of the
   subject is a clone there (`git clone --shared --no-checkout`, then check out only the paths
   you need), never a worktree of the shared repository; never materialize secret-bearing
   files. Never edit, commit, stash, reset, clean, check out or remove anything in the shared
   checkout, not even to prove a guard.
-- On the Codex harness the review dispatcher's disposable reviewer root is your scratch; the
-  same ownership rule applies there.
+- The same ownership rule applies on both harnesses.
 
 ## Report
 
