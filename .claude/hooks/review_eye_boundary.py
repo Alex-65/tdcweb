@@ -36,7 +36,12 @@ spellings. The hook does not read the command; it does not know what `git worktr
 `rm -rf`, `git reset --hard` or the next spelling mean. `Bash` is executed under a macOS
 Seatbelt profile that denies `file-write*` everywhere except the eye's own scratch root (and
 `/dev`), so the shared checkout, its git common directory, every other worktree, the home
-directory and the rest of the file system are read-only to it whatever the command says.
+directory and the rest of the file system are read-only to it whatever the command says. On
+Linux the same property comes from unprivileged bubblewrap (`/usr/bin/bwrap`): the whole file
+system is bound read-only, a private `/dev` and `/proc` are mounted, and the eye's scratch
+root (real path) is the one read-write bind; every namespace but the network is unshared and
+no capability is kept. A write elsewhere fails with `EROFS`, a hard link out of the root with
+`EXDEV`, and a nested user namespace cannot remount the locked read-only binds.
 `Write`, `Edit`, `MultiEdit` and `NotebookEdit` are harness file operations, not shell: the
 harness writes them itself, unsandboxed, AFTER this hook has answered, so a path this hook
 found inside the root can be swapped for a symlink to the subject between the check and the
@@ -65,19 +70,23 @@ FAIL CLOSED, STRUCTURALLY. A hook process that exits 1 is a non-blocking error a
 call PROCEEDS -- an uncaught exception would fail OPEN. So `hook` never raises: every
 failure it can meet -- unparsable input, an unsafe identifier, a contract whose role line is
 missing or ambiguous, a tool the boundary does not cover, a scratch root it cannot create,
-`sandbox-exec` absent or not executable -- becomes a DENY carried in the hook's JSON, and if
+the platform's primitive (`sandbox-exec`, `bwrap`) absent or not executable, a platform with
+neither, a Linux bwrap that cannot establish its sandbox over the eye's root (proven by one
+probe before each allow) -- becomes a DENY carried in the hook's JSON, and if
 even that cannot be printed the process exits 2, which blocks. An eye whose isolation cannot
 be established therefore cannot execute at all, and reports that it could not; it never
 falls back to unrestricted execution.
 
 THE SCRATCH ROOT is minted by this module, never by the dispatching brief:
-`<tempdir>/claude-review-eye/<session_id>/<agent_id>`, created by the hook on the eye's
+`<base>/claude-review-eye/<session_id>/<agent_id>`, created by the hook on the eye's
 first call. Ownership is thereby proven from the instrument's own data (the harness's ids),
 not from a name an orchestrator typed. The wrapped command sees it as `$REVIEW_EYE_SCRATCH`,
 its `TMPDIR` is redirected beneath it so `tempfile`, `mktemp` and git temp files land
 inside the boundary, and `$REVIEW_EYE_ACTOR` carries the classified `agent_type`. The
-Seatbelt profile is regenerated on every call and passed inline (`-p`), so there is no
-profile file inside the writable root for the eye to edit. An eye that needs a mutable copy
+Seatbelt profile and the bwrap arguments are regenerated on every call and passed inline, so
+there is no sandbox description inside the writable root for the eye to edit. `<base>` is
+`scratch_base()`: the FleetLocal volume on macOS, the account's own owner-only
+`~/.local/state/fleet/scratch/work` elsewhere, or `FLEET_SCRATCH_ROOT` when it is set. An eye that needs a mutable copy
 of the subject CLONES it into its scratch (`git clone --shared`), which writes nothing into
 the subject's repository; `git worktree add` from the subject would, and is refused like any
 other write there.
@@ -97,7 +106,9 @@ contract sentence is read by the eye, not by this tool.
 `sandbox_apply`, so from inside the boundary the primitive cannot be applied at all: `check`
 then reports a distinct, named outcome (`not measurable from inside a sandbox`) rather than
 a false `REFUSED`, and the control run fails loudly instead of counting a command that never
-reached the boundary as a refusal. The orchestrator runs both before dispatching an eye and
+reached the boundary as a refusal. On Linux a nested `bwrap` is refused where the host forbids
+nested user namespaces, and `check` reports that as a failed cell carrying bwrap's own words.
+The orchestrator runs both before dispatching an eye and
 cites them; an eye consumes that evidence, as `CANON.md` §Review says of every proof.
 
 MANAGED PROJECTS RUN THIS SAME FILE. A Fleet-managed project whose Claude roster declares
@@ -190,8 +201,19 @@ SETTINGS_PATH = ".claude/settings.json"
 AGENTS_DIR = ".claude/agents"
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
+#: The Linux primitive: unprivileged bubblewrap at its fixed distribution path, never one found
+#: on PATH. Measured on 2026-10-13 on all six managed Linux accounts (0.9.0, and 0.6.1 on dwh;
+#: not setuid; caps dropped, subject writes EROFS).
+BWRAP = "/usr/bin/bwrap"
+LINUX = sys.platform.startswith("linux")
+#: This platform's primitive. Every platform but Linux names `sandbox-exec`, which exists only
+#: on macOS: elsewhere it is absent, and absence is a refusal.
+SANDBOX_PRIMITIVE = BWRAP if LINUX else SANDBOX_EXEC
+#: The shell that runs the eye's command under the primitive. The managed Linux accounts carry
+#: no zsh (measured on all six), and Claude Code runs its Bash tool there in bash.
+EYE_SHELL = "/bin/bash" if LINUX else "/bin/zsh"
 #: Test seam only: lets the "isolation unavailable" cell point at a path that
-#: does not exist. Never set in production.
+#: does not exist. Never set in production. It overrides `SANDBOX_PRIMITIVE`.
 SANDBOX_EXEC_ENV = "REVIEW_EYE_SANDBOX_EXEC"
 SCRATCH_ENV = "REVIEW_EYE_SCRATCH"
 ACTOR_ENV = "REVIEW_EYE_ACTOR"
@@ -211,7 +233,7 @@ PLAIN_LINE = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]+(.*?))?[ \t]*")
 #: What macOS prints when a sandboxed process tries to apply another profile.
 NESTED_SANDBOX_MARK = "sandbox_apply"
 #: What the operating system says when the boundary refuses a write.
-DENIAL_MARK = "operation not permitted"
+DENIAL_MARK = "read-only file system" if LINUX else "operation not permitted"
 
 
 class Refusal(Exception):
@@ -365,14 +387,27 @@ def is_bounded(project_dir: pathlib.Path, agent_type: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def scratch_base() -> pathlib.Path:
-    """Fleet-owned heavy scratch, independent of global TMPDIR and shell startup."""
-    root = pathlib.Path(os.environ.get(
-        "FLEET_SCRATCH_ROOT", "/Volumes/ST7T2T/FleetLocal/scratch/work"))
-    if not root.is_absolute():
-        raise ValueError("FLEET_SCRATCH_ROOT must be absolute")
-    if "FLEET_SCRATCH_ROOT" not in os.environ and not pathlib.Path("/Volumes/ST7T2T").is_mount():
+    """Fleet-owned heavy scratch, independent of global TMPDIR and shell startup.
+
+    `FLEET_SCRATCH_ROOT` when set. Otherwise macOS uses the FleetLocal volume, refusing when it
+    is not mounted, and Linux uses the account's own `~/.local/state/fleet/scratch/work`, made
+    owner-only -- the default `codex-review` already applies on the same accounts. A per-account
+    base keeps one account's eyes out of a `/tmp` another account on the same host shares."""
+    if "FLEET_SCRATCH_ROOT" in os.environ:
+        root = pathlib.Path(os.environ["FLEET_SCRATCH_ROOT"])
+        if not root.is_absolute():
+            raise ValueError("FLEET_SCRATCH_ROOT must be absolute")
+        return root.resolve()
+    if LINUX:
+        state = pathlib.Path.home() / ".local" / "state" / "fleet" / "scratch"
+        root = state / "work"
+        root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        for directory in (state, root):
+            directory.chmod(0o700)
+        return root.resolve()
+    if not pathlib.Path("/Volumes/ST7T2T").is_mount():
         raise OSError("Fleet scratch volume is not mounted; set FLEET_SCRATCH_ROOT explicitly")
-    return root.resolve()
+    return pathlib.Path("/Volumes/ST7T2T/FleetLocal/scratch/work").resolve()
 
 
 def private_scratch(prefix: str) -> pathlib.Path:
@@ -423,12 +458,50 @@ def seatbelt_profile(root: pathlib.Path) -> str:
             '(allow file-write* (subpath "/dev"))\n')
 
 
-def sandbox_exec() -> str:
-    path = os.environ.get(SANDBOX_EXEC_ENV, SANDBOX_EXEC)
+def bwrap_arguments(root: pathlib.Path) -> list[str]:
+    """Bind everything read-only, then a private `/dev` and `/proc`, then `root` (real path)
+    read-write. The order is the mechanism: a later bind covers an earlier one, so `/` first."""
+    real = os.path.realpath(root)
+    return ["--unshare-all", "--share-net", "--die-with-parent", "--new-session",
+            "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--bind", real, real]
+
+
+def sandbox_primitive() -> str:
+    path = os.environ.get(SANDBOX_EXEC_ENV, SANDBOX_PRIMITIVE)
     if not (os.path.isfile(path) and os.access(path, os.X_OK)):
         raise Refusal(f"isolation unavailable: {path} is absent or not executable; "
                       f"the eye cannot execute unbounded instead")
     return path
+
+
+def sandbox_argv(root: pathlib.Path) -> list[str]:
+    """The primitive and its arguments: every file write denied except under `root`."""
+    primitive = sandbox_primitive()
+    if LINUX:
+        return [primitive, *bwrap_arguments(root)]
+    return [primitive, "-p", seatbelt_profile(root)]
+
+
+def establish_sandbox(root: pathlib.Path) -> None:
+    """On Linux, prove the sandbox can be set up over `root` before the eye's Bash is allowed.
+
+    An executable bwrap can still be unable to create its namespaces (a host forbidding
+    unprivileged user namespaces, an AppArmor profile it depends on unloaded). Allowed anyway,
+    every command -- the eye's mandatory first one included -- would fail, and the eye would end
+    REVIEW NOT OBTAINED; refused here, it keeps the read-only mode its contract names for a host
+    with no usable sandbox. Never a fallback to unconfined execution either way."""
+    if not LINUX:
+        return
+    try:
+        probe = subprocess.run([*sandbox_argv(root), "/bin/true"], capture_output=True,
+                               text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise Refusal(f"isolation unavailable: the sandbox could not be established: {error}; "
+                      f"the eye cannot execute unbounded instead") from error
+    if probe.returncode != 0:
+        raise Refusal(f"isolation unavailable: {sandbox_primitive()} cannot establish its sandbox "
+                      f"here (rc={probe.returncode}: {probe.stderr.strip()[-200:]}); the eye "
+                      f"cannot execute unbounded instead")
 
 
 def command_script(command: str, root: pathlib.Path, actor: str) -> tuple[pathlib.Path, bytes]:
@@ -440,7 +513,7 @@ def command_script(command: str, root: pathlib.Path, actor: str) -> tuple[pathli
            f"TMPDIR={shlex.quote(str(root / 'tmp'))} "
            f"TMPPREFIX={shlex.quote(str(root / 'tmp' / 'zsh'))} "
            f"PYTHONDONTWRITEBYTECODE=1")
-    # Re-export after ~/.zshenv; keep here-doc staging within the owned scratch.
+    # Re-export after the shell's startup file (~/.zshenv, $BASH_ENV); keep here-doc staging within the owned scratch.
     body = f"export {env}\n{command}\n".encode("utf-8")
     return root / (".fleet-command." + hashlib.sha256(body).hexdigest() + ".zsh"), body
 
@@ -464,13 +537,13 @@ def wrapped_command(command: str, root: pathlib.Path, actor: str, *, context: di
 
     Claude's headless permission parser can ask again for complex inline `zsh -c`
     programs after the hook allows them. A script operand avoids that inline safety
-    check; the unchanged Seatbelt profile remains mandatory for every execution.
+    check; the unchanged sandbox (Seatbelt, or bwrap on Linux) remains mandatory for every
+    execution.
     """
     script, _ = command_script(command, root, actor)
     if context is not None:
         return shlex.join([context["shell"], str(script)])
-    return (f"{shlex.quote(sandbox_exec())} -p {shlex.quote(seatbelt_profile(root))} "
-            f"/bin/zsh {shlex.quote(str(script))}")
+    return shlex.join([*sandbox_argv(root), EYE_SHELL, str(script)])
 
 
 def prepare_command(command: str, root: pathlib.Path, actor: str, *, context: dict | None = None) -> str:
@@ -595,6 +668,8 @@ def decide(data: dict) -> dict | None:
         return None
     if tool == BASH_TOOL:
         created = ensure_scratch(root)
+        if context is None:
+            establish_sandbox(root)
         updated = dict(tool_input)
         updated["command"] = prepare_command(tool_input.get("command"), root, agent_type,
                                              **({"context": context} if context else {}))
@@ -777,20 +852,19 @@ def class_violations(root: pathlib.Path) -> list[str]:
 
 def primitive_violations() -> list[str]:
     """The sandbox primitive on this host, measured both ways at check time."""
-    try:
-        exe = sandbox_exec()
-    except Refusal as refusal:
-        return [str(refusal)]
     with tempfile.TemporaryDirectory() as tmp:
         base = pathlib.Path(tmp)
         inside, outside = base / "inside", base / "outside"
         inside.mkdir()
         outside.mkdir()
-        profile = seatbelt_profile(inside)
+        try:
+            argv = sandbox_argv(inside)
+        except Refusal as refusal:
+            return [str(refusal)]
         problems: list[str] = []
         for target, expect_ok, label in ((inside / "x", True, "inside its root"),
                                          (outside / "x", False, "outside its root")):
-            result = subprocess.run([exe, "-p", profile, "/usr/bin/touch", str(target)],
+            result = subprocess.run([*argv, "/usr/bin/touch", str(target)],
                                     capture_output=True, text=True)
             if NESTED_SANDBOX_MARK in result.stderr:
                 return ["sandbox primitive: not measurable from inside a sandbox (nested "
@@ -799,7 +873,8 @@ def primitive_violations() -> list[str]:
             if (result.returncode == 0) != expect_ok or target.exists() != expect_ok:
                 problems.append(f"sandbox primitive: a write {label} was "
                                 f"{'refused' if expect_ok else 'permitted'} "
-                                f"(rc={result.returncode}, exists={target.exists()})")
+                                f"(rc={result.returncode}, exists={target.exists()}, "
+                                f"stderr={result.stderr.strip()[-200:]!r})")
     return problems
 
 
