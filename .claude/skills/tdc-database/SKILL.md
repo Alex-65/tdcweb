@@ -22,10 +22,11 @@ Use this skill when:
 
 ### Database Credentials
 
-| Type | User | Password | Database |
-|------|------|----------|----------|
-| Admin | admin | rutt1n0 | - |
-| App | tdcweb | tdcweb | tdcweb |
+No credential value is written here. The application account is the `DB_USER` and `DB_PASSWORD` keys
+read by `backend/app/config.py` (`backend/.env` in development, `/etc/tdcweb/backend.env` in production).
+The MySQL administrative account lives only outside the repository, in the environment or a client option
+file passed with `--defaults-extra-file`. The scripts below read `DB_ROOT_PASS` and `DB_PASS` from the
+environment and stop when one is unset.
 
 ### Database Standards
 
@@ -191,10 +192,10 @@ set -e
 
 # Configuration
 DB_ROOT_USER="admin"
-DB_ROOT_PASS="rutt1n0"
+DB_ROOT_PASS="${DB_ROOT_PASS:?set DB_ROOT_PASS in the environment}"
 DB_NAME="tdcweb"
 DB_USER="tdcweb"
-DB_PASS="tdcweb"
+DB_PASS="${DB_PASS:?set DB_PASS (the DB_PASSWORD key of backend/.env)}"
 
 SQL_DIR="$(dirname "$0")/.."
 
@@ -254,7 +255,7 @@ echo "Connection info:"
 echo "  Host: localhost"
 echo "  Database: $DB_NAME"
 echo "  User: $DB_USER"
-echo "  Password: $DB_PASS"
+echo "  Password: (DB_PASS, not printed)"
 ```
 
 ### Phase 5: Migration Script (scripts/migrate.sh)
@@ -268,7 +269,7 @@ set -e
 
 # Configuration
 DB_USER="tdcweb"
-DB_PASS="tdcweb"
+DB_PASS="${DB_PASS:?set DB_PASS (the DB_PASSWORD key of backend/.env)}"
 DB_NAME="tdcweb"
 
 SQL_DIR="$(dirname "$0")/.."
@@ -340,7 +341,7 @@ set -e
 
 # Configuration
 DB_USER="tdcweb"
-DB_PASS="tdcweb"
+DB_PASS="${DB_PASS:?set DB_PASS (the DB_PASSWORD key of backend/.env)}"
 DB_NAME="tdcweb"
 
 BACKUP_DIR="/data1/tdcweb/backups"
@@ -394,10 +395,10 @@ set -e
 
 # Configuration
 DB_ROOT_USER="admin"
-DB_ROOT_PASS="rutt1n0"
+DB_ROOT_PASS="${DB_ROOT_PASS:?set DB_ROOT_PASS in the environment}"
 DB_NAME="tdcweb"
 DB_USER="tdcweb"
-DB_PASS="tdcweb"
+DB_PASS="${DB_PASS:?set DB_PASS (the DB_PASSWORD key of backend/.env)}"
 
 # Colors
 RED='\033[0;31m'

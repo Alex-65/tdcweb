@@ -21,7 +21,8 @@ contract, keep it thin, and prove each route by status for both the accepted and
 - Reachability: in development `routeRules` in `frontend/nuxt.config.ts` proxy `/api/locations`,
   `/api/events` and `/api/health` to Flask on :9502; in production `apache/thedreamerscave-prod.conf` sends
   `/api/auth/` and `/api/revalidate` to Nuxt (:9501) and other `/api/` to Flask (:9500). A new Flask route
-  is reachable from the browser only once both are updated.
+  therefore needs its own `routeRules.proxy` pair in development; production already forwards it, unless
+  it sits under `/api/auth/` or is `/api/revalidate`.
 - Language: `_resolve_language()` reads `Accept-Language` (`en|it|fr|es`, default `en`); content falls
   back to `en` when a translation is missing. There is no `lang` query parameter.
 
@@ -32,9 +33,10 @@ contract, keep it thin, and prove each route by status for both the accepted and
   `conflict`, `unprocessable_entity`, `server_error` give `{success: false, error, errors?}`. Never add
   another shape. `useApiFetch` and the BFF handlers unwrap `.data`; `/api/revalidate` is Nitro-internal and
   deliberately unenveloped.
-- **Authorization at the edge.** Every non-public route carries `@jwt_required` stacked above
-  `@admin_required` or `@staff_required` (`backend/app/utils/auth_decorators.py`). A role check is not an
-  ownership check: routes over user-owned rows (favorites, notification preferences) also check the owner.
+- **Authorization at the edge.** Every non-public route carries `@jwt_required`; a route whose contract
+  needs an elevated role adds `@admin_required` or `@staff_required` below it
+  (`backend/app/utils/auth_decorators.py`), while a route for any signed-in user (`/api/auth/me`) carries
+  `@jwt_required` alone. A role check is not an ownership check: routes over user-owned rows (favorites, notification preferences) also check the owner.
   An undecorated state-changing route is a defect.
 - **Forgery and origin.** State changes are never reachable by `GET`: the `tdc_access` cookie is
   `SameSite=Lax` and travels on cross-site top-level `GET`s. The Flask CORS allow-list in `create_app`

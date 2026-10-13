@@ -19,8 +19,9 @@ content.
   `User.to_dict()` omits the hash unless `include_sensitive=True`.
 - **Token issuance** — `backend/app/utils/jwt_helpers.py`: HS256 with `JWT_SECRET_KEY`; access
   `{sub, role, type:'access'}` 15 min, refresh `{sub, type:'refresh', jti}` 7 days; `verify_token`
-  requires `exp, iat, sub, type` and checks `type`. A role change takes effect only when the access
-  token expires. Refresh rotation issues a new `jti` but nothing records or revokes the old one, and
+  requires `exp, iat, sub, type` and checks `type`. Authorization reads the role from the user row
+  `jwt_required` reloads on every request, not from the token's `role` claim, so a role change applies on the
+  next request. Refresh rotation issues a new `jti` but nothing records or revokes the old one, and
   logout is a cookie clear only (`routes/api/auth.py`) — a stolen refresh token stays valid until it
   expires. That is known debt, not a new finding, unless the change makes it worse.
 - **Secrets at boot** — `backend/app/config.py`: `Config` carries public dev placeholders for

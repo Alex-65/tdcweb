@@ -45,7 +45,8 @@ revalidation), and provider tokens once integrations exist.
    cookie travels to, every place a value is rendered — not only the case that prompted it.
 4. Name the smallest mitigation and the evidence to demand: a must-refuse test next to a must-pass one.
 5. Name the open or closed items it could reopen: TD-015 (open redirect through the login page's
-   `?redirect=`), the stale-role window of the 15-minute access token, the absence of refresh revocation,
+   `?redirect=`), a new consumer that trusts the access token's `role` claim (up to 15 minutes stale) instead of the
+   reloaded user, the absence of refresh revocation,
    the missing auth rate limiting the kernel requires.
 6. Secrets: refer to them by key name; never copy a value, even one found in a file.
 

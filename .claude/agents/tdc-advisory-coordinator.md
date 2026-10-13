@@ -44,8 +44,8 @@ Each ends with what it did not verify; you do not fill those gaps by assumption.
    that decides, or establish that nothing in the repository decides it — then it is an operator decision,
    not a tie to break.
 4. **One recommendation with ordered conditions**, each precondition before the step that needs it (e.g.
-   the migration applied to `tdcweb_test` before the tests that rely on it; the Apache `<Location>` added
-   before a new Flask route is announced as public).
+   the migration applied to `tdcweb_test` before the tests that rely on it; a new Flask
+   route's dev `routeRules.proxy` pair added before the route is announced as reachable).
 5. **Close the operator list:** exactly the decisions that cannot be derived — a product choice, a risk
    the operator owns, a policy, an authorization to touch production or cross a secrets or authentication
    boundary. Nothing derivable goes on it; nothing on it is decided here.

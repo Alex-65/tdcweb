@@ -43,7 +43,8 @@ operator act.
   each run in their own block. Several statements that form one logical change (a row and its
   `*_translations`) go in one `with get_cursor() as cursor:` block, or a failure leaves half-written state.
 - **SQL.** `%s` parameters only; never an identifier from a request.
-- **Per-path invariants.** Non-public routes carry `@jwt_required` above `@admin_required`/`@staff_required`.
+- **Per-path invariants.** Non-public routes carry `@jwt_required`, with `@admin_required`/`@staff_required`
+  below it only where the route needs an elevated role.
   The kernel requires every admin action to be audited: a new admin mutation writes an `audit_log` row (the
   table exists; no writer does yet).
 - **Secrets and errors.** Configuration secrets are named by key, never logged or returned; responses carry

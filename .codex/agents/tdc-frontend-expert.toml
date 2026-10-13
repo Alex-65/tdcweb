@@ -267,7 +267,8 @@ import type { Location } from '~/types/location'
 const route = useRoute()
 const { locale } = useI18n()
 
-const { data: location, error } = await useFetch<Location>(
+// useApiFetch unwraps Flask's `{ success, data }` envelope; a bare useFetch would not.
+const { data: location, error } = await useApiFetch<Location>(
   `/api/locations/${route.params.slug}`,
   {
     key: `location-${route.params.slug}-${locale.value}`,
@@ -301,12 +302,13 @@ const schema = z.object({ email: z.string().email(), password: z.string().min(1)
 
 export default defineEventHandler(async (event) => {
   const body = await readValidatedBody(event, (i) => schema.parse(i))
-  const data = await flaskFetch<{ user: User }>('/api/auth/example', event, {
+  // flaskFetch returns Flask's envelope as is; unwrap `.data` here, as login.post.ts does.
+  const response = await flaskFetch<ApiResponse<{ access: string; user: User }>>('/api/auth/example', event, {
     method: 'POST',
     body,
   })
-  setAccessCookie(event, data.access)  // only for auth handlers
-  return { user: data.user }
+  setAccessCookie(event, response.data.access)  // only for auth handlers
+  return { user: response.data.user }
 })
 ```
 
@@ -445,13 +447,13 @@ if (!authorized) {
 }
 ```
 
-### `useFetch` canonical call (playbook §5.2)
+### `useApiFetch` canonical call (playbook §5.2)
 
 ```typescript
-const { data, error, pending, refresh } = await useFetch<Event[]>('/api/events', {
+// useApiFetch owns `transform` (it unwraps the envelope); Flask already returns only published events.
+const { data, error, pending, refresh } = await useApiFetch<Event[]>('/api/events', {
   key: 'events-list',                       // explicit dedup key
   default: () => [],                         // never null → tighter types
-  transform: (raw) => raw.filter(e => e.is_published),
   watch: [currentFilter],                    // re-fetch on ref change
   headers: { 'Accept-Language': locale.value },
 })

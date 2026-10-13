@@ -54,7 +54,8 @@ measurement is `tdc-browser-performance-tester`'s; schema and index changes are
 Never trade correctness, security or freshness for speed without the owner's decision: auth checks and
 the BFF cookie flow, per-user data never cached on a shared key (an ISR or prerendered route must not
 render anything user-specific), locale in every cache key, the reduced-motion paths, the
-`ctx.revert()` cleanup. Loosening any of these goes to `tdc-security-expert` or the operator.
+`ctx.revert()` cleanup. Loosening any of these is the operator's decision, informed by `tdc-security-expert`'s
+analysis where a security safeguard is involved.
 Measurements run against the dev instance or synthetic data only — never production, never real
 external services, and no load generation against shared infrastructure without the operator.
 

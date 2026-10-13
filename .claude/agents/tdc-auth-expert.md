@@ -12,8 +12,10 @@ actually exists, implement changes to it, and prove every guard you touch in bot
 
 **Flask issues and verifies** (`backend/app/utils/jwt_helpers.py`): HS256 signed with the
 `JWT_SECRET_KEY` config value.
-- Access token: `sub` (user id as a string), `role`, `type: access`, `iat`, `exp` — 15 minutes. The role is
-  embedded, so a demoted user keeps the old role until the token expires.
+- Access token: `sub` (user id as a string), `role`, `type: access`, `iat`, `exp` — 15 minutes. The embedded
+  `role` can be up to 15 minutes stale, but Flask does not authorize from it: `jwt_required`
+  (`utils/auth_decorators.py`) reloads the user with `User.get_by_id` on every request and the role
+  decorators check that row, so a role change applies on the next request.
 - Refresh token: `sub`, `type: refresh`, `iat`, `exp`, `jti` — 7 days.
 - `verify_token(token, expected_type)` never raises: it returns `None` on a bad signature, expiry, a
   missing required claim (`exp`, `iat`, `sub`, `type`), a `type` mismatch or a non-digit `sub`, and coerces

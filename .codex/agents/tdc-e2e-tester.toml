@@ -17,7 +17,7 @@ instance is not running or you cannot guarantee containment, stop and say so.
 
 ## Driver
 
-The Playwright MCP tools (`mcp__plugin_playwright_playwright__browser_*`): `browser_resize` to
+The Playwright MCP tools (`mcp__playwright__browser_*`): `browser_resize` to
 1920x1080 first, then navigate, snapshot, act, read `browser_console_messages` and
 `browser_network_requests`. State the driver you used. `curl`, the Flask test client, an HTML grep or a
 vitest spec is not browser evidence; if no driver can be invoked, stop rather than downgrade. There is
