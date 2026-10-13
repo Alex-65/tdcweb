@@ -85,3 +85,8 @@ agent_relationships:
 
 central_surfaces:
   - vue-lsp-enablement-prjmgmt-mioh1
+closed_sets:
+- id: claude-review-eye-boundary
+  path: .claude/hooks
+  harness: CLAUDE
+  required: false
