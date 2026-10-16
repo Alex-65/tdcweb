@@ -8,7 +8,7 @@ The health check endpoints are used by load balancers, monitoring systems, and d
 
 ## Endpoints
 
-### GET /api/v1/health
+### GET /api/health
 
 Basic application health check.
 
@@ -36,7 +36,7 @@ Basic application health check.
 
 ---
 
-### GET /api/v1/health/db
+### GET /api/health/db
 
 Database connectivity health check.
 
@@ -72,7 +72,7 @@ Database connectivity health check.
 
 ---
 
-### GET /api/v1/health/full
+### GET /api/health/full
 
 Comprehensive health check including all system components.
 
@@ -129,13 +129,13 @@ Comprehensive health check including all system components.
 
 ```bash
 # Basic health check
-curl http://localhost:9500/api/v1/health
+curl http://localhost:9500/api/health
 
 # Database health check
-curl http://localhost:9500/api/v1/health/db
+curl http://localhost:9500/api/health/db
 
 # Full system health
-curl http://localhost:9500/api/v1/health/full
+curl http://localhost:9500/api/health/full
 ```
 
 ### Python
@@ -143,7 +143,7 @@ curl http://localhost:9500/api/v1/health/full
 ```python
 import requests
 
-response = requests.get('http://localhost:9500/api/v1/health')
+response = requests.get('http://localhost:9500/api/health')
 if response.status_code == 200:
     data = response.json()
     print(f"Status: {data['data']['status']}")
@@ -153,7 +153,7 @@ if response.status_code == 200:
 ### JavaScript
 
 ```javascript
-fetch('http://localhost:9500/api/v1/health')
+fetch('http://localhost:9500/api/health')
   .then(res => res.json())
   .then(data => {
     console.log('Status:', data.data.status);
@@ -172,7 +172,7 @@ upstream backend {
 
 server {
     location /health {
-        proxy_pass http://backend/api/v1/health;
+        proxy_pass http://backend/api/health;
         proxy_connect_timeout 5s;
         proxy_read_timeout 5s;
     }
@@ -182,7 +182,7 @@ server {
 ### AWS ALB
 
 Configure health check with:
-- Path: `/api/v1/health`
+- Path: `/api/health`
 - Port: `9500`
 - Protocol: `HTTP`
 - Healthy threshold: `2`

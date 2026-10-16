@@ -1,1636 +1,661 @@
 ---
 name: tdc-frontend
-description: Create Vue.js 3 frontend code for The Dreamer's Cave. Use for components, composables, stores, animations, and theming.
+description: Create Nuxt 4 frontend code for The Dreamer's Cave. Use for pages, components, composables, stores, server BFF handlers, animations, and theming.
 ---
 
-# TDC Frontend Developer
+# TDC Frontend Developer (Nuxt 4)
 
-Expert agent for creating Vue.js 3 frontend code for The Dreamer's Cave virtual music club website.
+Expert skill for creating Nuxt 4 frontend code for The Dreamer's Cave virtual music club website.
 
 ## Trigger
 
 Use this skill when:
-- User asks to create or modify frontend code
-- User says "/frontend", "/tdc-frontend", "/vue", or "/component"
-- User asks to create Vue components, composables, or stores
-- User wants to implement animations, theming, or i18n
-- User asks about GSAP, Tailwind, or TipTap
+- User asks to create or modify frontend code under `frontend/app/**` or `frontend/server/**`
+- User says "/frontend", "/tdc-frontend", "/nuxt", "/vue", or "/component"
+- User asks for pages, layouts, components, composables, Pinia stores, middleware, plugins, or Nitro server routes
+- User wants to implement animations (GSAP / ScrollTrigger / Lenis), theming, i18n, SEO, or BFF auth
+- User asks about `useFetch`, `useApiFetch`, `$fetch`, `useAuth`, `useSeoMeta`, vee-validate + zod, or TipTap
 
 ## Project Context
 
-**The Dreamer's Cave** - Website for a virtual music club in Second Life.
+**The Dreamer's Cave** -- website for a virtual music club in Second Life.
 **Motto:** "You Can See The Music"
 
 ### Tech Stack
 
-| Component | Technology | Notes |
-|-----------|------------|-------|
-| Framework | Vue.js 3 | Composition API, `<script setup>` |
-| Build | Vite | Fast HMR, optimized builds |
-| Styling | Tailwind CSS | Utility-first, dark theme |
-| Animations | GSAP + ScrollTrigger | Apple-style scroll animations |
-| Smooth Scroll | Lenis | Smooth scrolling library |
-| State | Pinia | Vue 3 state management |
-| i18n | Vue I18n | EN, IT, FR, ES |
-| Icons | Lucide Vue | Consistent icon set |
-| WYSIWYG | TipTap | Rich text editor |
+| Layer | Technology | Notes |
+|---|---|---|
+| Meta-framework | **Nuxt 4** | `app/` layer, `compatibilityVersion: 4`, `compatibilityDate: '2026-04-01'` |
+| UI | Vue 3 Composition API | `<script setup lang="ts">` always |
+| Language | **TypeScript strict** | `typescript.strict: true`, no `any` |
+| Build | Vite under Nuxt | HMR, ESM, tree-shaking |
+| Styling | **Tailwind CSS v4 CSS-first** via `@tailwindcss/vite` | NOT `@nuxtjs/tailwindcss`; tokens live in `app/assets/css/main.css` `@theme` block |
+| Theming | CSS variables under `[data-location="<slug>"]` | Set on `<body>` via `useLocationTheme(slug)` -> `useHead({ bodyAttrs })` -- zero-JS at paint, SSR-safe |
+| Animations | GSAP + ScrollTrigger + Lenis | `.client.ts` plugins only; package name `lenis` (NOT `@studio-freight/lenis`) |
+| State | Pinia via `@pinia/nuxt` | **Setup syntax only** -- `defineStore('x', () => { ... })` |
+| i18n | `@nuxtjs/i18n` | `prefix_except_default` -- EN at `/`, others at `/it/`, `/fr/`, `/es/` |
+| SEO | `@nuxtjs/seo` + `@nuxtjs/sitemap` + `@nuxtjs/robots` | `useSeoMeta`, `useSchemaOrg` |
+| Image | `@nuxt/image` | `<NuxtImg>` (auto avif/webp) |
+| Forms | vee-validate + zod via `toTypedSchema` | Same schema reused server-side via `readValidatedBody` |
+| Rich text | `@tiptap/vue-3` | Admin-only, `<ClientOnly>`-wrapped |
+| Testing | vitest + `@nuxt/test-utils` + happy-dom (unit) | Playwright 1920x1080 (E2E) |
+
+### Ports
+
+| | Dev | Prod |
+|---|---|---|
+| Nuxt | `:9503` (`nuxi dev`) | `:9501` (node SSR via systemd) |
+| Flask | `:9502` | `:9500` (gunicorn via systemd) |
 
 ### File Structure
 
 ```
 frontend/
-├── src/
-│   ├── assets/
-│   │   ├── images/
-│   │   ├── videos/
-│   │   └── fonts/
-│   │
-│   ├── components/
-│   │   ├── common/           # Shared components
-│   │   │   ├── AppHeader.vue
-│   │   │   ├── AppFooter.vue
-│   │   │   ├── AppNav.vue
-│   │   │   ├── LanguageSwitcher.vue
-│   │   │   ├── LoadingSpinner.vue
-│   │   │   ├── Modal.vue
-│   │   │   └── Toast.vue
-│   │   │
-│   │   ├── landing/          # Landing page sections
-│   │   │   ├── HeroSection.vue
-│   │   │   ├── LocationsPreview.vue
-│   │   │   ├── EventsCarousel.vue
-│   │   │   ├── TechShowcase.vue
-│   │   │   └── PatreonCTA.vue
-│   │   │
-│   │   ├── locations/        # Location components
-│   │   │   ├── LocationCard.vue
-│   │   │   ├── LocationGallery.vue
-│   │   │   └── LocationMap.vue
-│   │   │
-│   │   ├── events/           # Event components
-│   │   │   ├── EventCard.vue
-│   │   │   ├── EventCalendar.vue
-│   │   │   └── EventCountdown.vue
-│   │   │
-│   │   ├── artists/          # Artist components
-│   │   │   ├── ArtistCard.vue
-│   │   │   └── ArtistGallery.vue
-│   │   │
-│   │   ├── blog/             # Blog components
-│   │   │   ├── PostCard.vue
-│   │   │   └── PostContent.vue
-│   │   │
-│   │   ├── auth/             # Auth components
-│   │   │   ├── LoginForm.vue
-│   │   │   ├── RegisterForm.vue
-│   │   │   └── OAuthButtons.vue
-│   │   │
-│   │   ├── user/             # User profile components
-│   │   │   ├── ProfileForm.vue
-│   │   │   └── NotificationSettings.vue
-│   │   │
-│   │   └── admin/            # Admin components
-│   │       ├── AdminSidebar.vue
-│   │       ├── DataTable.vue
-│   │       ├── MediaPicker.vue
-│   │       └── WysiwygEditor.vue
-│   │
-│   ├── composables/
-│   │   ├── useAuth.js
-│   │   ├── useApi.js
-│   │   ├── useScrollAnimations.js
-│   │   ├── useTheme.js
-│   │   └── useI18n.js
-│   │
-│   ├── stores/
-│   │   ├── auth.js
-│   │   ├── locations.js
-│   │   ├── events.js
-│   │   ├── artists.js
-│   │   └── ui.js
-│   │
-│   ├── views/
-│   │   ├── LandingPage.vue
-│   │   ├── LocationsPage.vue
-│   │   ├── LocationDetailPage.vue
-│   │   ├── EventsPage.vue
-│   │   ├── ArtistsPage.vue
-│   │   ├── BlogPage.vue
-│   │   ├── LoginPage.vue
-│   │   └── admin/
-│   │       └── DashboardPage.vue
-│   │
-│   ├── router/
-│   │   └── index.js
-│   │
-│   ├── i18n/
-│   │   ├── en.json
-│   │   ├── it.json
-│   │   ├── fr.json
-│   │   ├── es.json
-│   │   └── index.js
-│   │
-│   ├── styles/
-│   │   ├── main.css
-│   │   ├── animations.css
-│   │   └── themes/
-│   │       ├── base.css
-│   │       └── locations.css
-│   │
-│   ├── utils/
-│   │   ├── api.js
-│   │   ├── date.js
-│   │   └── validators.js
-│   │
-│   ├── App.vue
-│   └── main.js
-│
-├── public/
-├── index.html
-├── vite.config.js
-├── tailwind.config.js
-└── package.json
+|-- app/                         <-- PRIMARY SCOPE (Nuxt 4 `app/` layer)
+|   |-- app.vue
+|   |-- app.config.ts
+|   |-- error.vue
+|   |-- assets/
+|   |   `-- css/main.css         <-- Tailwind v4 @theme + per-location vars
+|   |-- components/              <-- auto-imported, flat naming via components.pathPrefix: false
+|   |   |-- AppHeader.vue
+|   |   |-- AppFooter.vue
+|   |   |-- common/
+|   |   |-- locations/
+|   |   |-- events/
+|   |   `-- forms/
+|   |-- composables/             <-- auto-imported
+|   |   |-- useApiFetch.ts       <-- envelope-aware Flask fetcher (SSR-aware baseURL)
+|   |   |-- useAuth.ts           <-- login/logout/refresh/me (uses useRequestFetch in SSR)
+|   |   |-- useLocationTheme.ts  <-- body[data-location=...] via useHead
+|   |   |-- useScrollAnimation.ts
+|   |   `-- useSmoothScroll.ts
+|   |-- middleware/              <-- file-based; opt-in via definePageMeta
+|   |   |-- auth.ts              <-- redirect to /auth/login if not authed
+|   |   |-- admin.ts             <-- gate by role 'admin'
+|   |   `-- staff.ts             <-- gate by role 'staff' or 'admin'
+|   |-- pages/                   <-- file-based routing
+|   |-- layouts/
+|   |-- plugins/
+|   |   |-- gsap.client.ts       <-- registers ScrollTrigger
+|   |   `-- lenis.client.ts      <-- syncs via gsap.ticker.add
+|   |-- stores/                  <-- Pinia setup syntax
+|   |   |-- auth.ts
+|   |   |-- locale.ts
+|   |   `-- ui.ts
+|   |-- types/                   <-- shared TS interfaces (User, Location, Event, ApiEnvelope)
+|   `-- utils/                   <-- pure helpers (decideAuthOutcome, buildLoginRedirect, ...)
+|-- server/                      <-- Nitro BFF
+|   |-- api/
+|   |   |-- auth/
+|   |   |   |-- login.post.ts
+|   |   |   |-- logout.post.ts
+|   |   |   |-- refresh.post.ts
+|   |   |   `-- me.get.ts
+|   |   `-- revalidate.post.ts   <-- admin-gated cache invalidation
+|   |-- middleware/
+|   |   `-- auth-forward.ts      <-- reads tdc_access cookie, stamps event.context.flaskHeaders
+|   `-- utils/
+|       |-- cookies.ts           <-- setAccessCookie/clearAccessCookie (HttpOnly, Lax/Strict)
+|       `-- flask-client.ts      <-- flaskFetch(url, event, options) resilient wrapper
+|-- i18n/locales/                <-- en.json, it.json, fr.json, es.json
+|-- public/
+|-- tests/
+|   |-- unit/                    <-- vitest specs
+|   `-- e2e/                     <-- Playwright specs
+|-- nuxt.config.ts
+|-- vitest.config.ts
+`-- package.json
 ```
 
-## Instructions
+**File size limits (NEW files only):**
+- `.vue` <= 500 lines -- split into sub-components or composables
+- `.ts` <= 800 lines -- split into modules
+- Existing oversized files: do NOT refactor unless strictly necessary
 
-### Phase 1: Component Pattern (Vue 3 Composition API)
+### Project Constants
 
-Always use `<script setup>` syntax:
+| Item | Value |
+|---|---|
+| Access cookie | `tdc_access` -- HttpOnly, SameSite=Lax, Path=/, 15 min |
+| Refresh cookie | `tdc_refresh` -- HttpOnly, SameSite=Strict, Path=/api/auth, 7 d, rotated on use |
+| Nuxt -> Flask SSR URL | `NUXT_FLASK_URL` (server-only env, read via `runtimeConfig.flaskUrl`) |
+| Public API base | `/api` (relative; resolved via `routeRules.proxy` in dev or Apache `mod_proxy_http` in prod) |
+| Default locale | `en` (no prefix); others `/it/`, `/fr/`, `/es/` |
+| Locations (8 of 10+ palettes live) | Cosmic/Tech: dreamerscave, dreamvision, evanescence -- Hybrid: livemagic, thelounge -- Warm: arquipelago, noahsark, jazzclub |
 
-```vue
-<script setup>
-/**
- * LocationCard - Displays a location with mood-based theming.
- *
- * Features:
- * - Dynamic theme based on location mood
- * - GSAP entrance animation
- * - Accessible keyboard navigation
- */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
-import { gsap } from 'gsap'
-import { MapPin, Users } from 'lucide-vue-next'
+---
 
-// ============================================
-// Props
-// ============================================
-const props = defineProps({
-  /**
-   * Location data object from API
-   */
-  location: {
-    type: Object,
-    required: true,
-    validator: (loc) => loc.slug && loc.name
+## Routing
+
+File-based under `app/pages/`. Route options via `definePageMeta`:
+
+```typescript
+// app/pages/locations/[slug].vue
+definePageMeta({
+  layout: 'default',
+  // public page -- no middleware
+})
+```
+
+```typescript
+// app/pages/dashboard/index.vue
+definePageMeta({
+  layout: 'dashboard',
+  middleware: ['auth'],          // composes left-to-right
+})
+```
+
+```typescript
+// app/pages/admin/users.vue
+definePageMeta({
+  layout: 'admin',
+  middleware: ['auth', 'admin'], // auth first, then role check
+})
+```
+
+Middleware composition: array order matters. `auth` decides "is the user logged in?" and short-circuits to `/auth/login?redirect=...`. `admin` / `staff` then decide role; the user must already be authed when these run.
+
+### Rendering strategy (declared in `nuxt.config.ts`)
+
+| Route pattern | `routeRules` | TTL / notes |
+|---|---|---|
+| `/`, `/about`, `/contact` | `{ prerender: true }` | SSG -- build-time |
+| `/locations/**`, `/artists/**` | `{ prerender: true }` + on-demand revalidate | SSG, admin-invalidated |
+| `/events/**` | `{ swr: 300 }` | ISR 5 min |
+| `/blog/**` | `{ swr: 3600 }` + on-demand | ISR 1 h + instant publish |
+| `/auth/login`, `/auth/register`, `/auth/callback/**` | `{ ssr: true, swr: false }` | Live SSR per-request |
+| `/dashboard/**`, `/admin/**` | `{ ssr: false }` | SPA -- auth-gated, no SEO value |
+| `/api/auth/**`, `/api/revalidate` | (Nitro server routes) | Handled by Nuxt |
+| `/api/**` (other) | `{ proxy: '<flaskUrl>/api/**' }` | Proxied to Flask |
+
+**Important Phase 4 lesson**: in dev, use `routeRules.proxy` (NOT `nitro.devProxy` catch-all). Precedence ordering: `routeRules` correctly defers `/api/auth/**` and `/api/revalidate` to your Nitro handlers; a top-level `nitro.devProxy['/api']` catch-all would intercept and forward those to Flask, breaking the BFF.
+
+---
+
+## Data Fetching -- decision table
+
+| API | When to use | SSR-aware | Notes |
+|---|---|---|---|
+| **`useApiFetch<T>(path, opts?)`** | Calling Flask from inside `setup()` -- the default | Yes | Unwraps `{success, data}` envelope to `T`; resolves baseURL via `resolveApiBaseURL(isServer, flaskUrl)` -- on SSR uses `NUXT_FLASK_URL`, on client uses `''` (relative) |
+| **`useFetch<T>(path)`** | 3rd-party APIs that don't return the TDC envelope | Yes | Returns full body |
+| **`$fetch<T>(path)`** | Imperative calls inside event handlers, `onMounted`, server utilities | No | Caller controls context |
+| **`useRequestFetch()()`** | SSR-time calls that must forward the user's cookies (e.g. `useAuth.fetchMe()` during SSR) | Yes | Inherits incoming request headers; required so Nitro `auth-forward` middleware sees the cookie |
+
+**Rules:**
+- Always pass an explicit `key` to `useApiFetch` / `useFetch` -- deterministic dedup; required for ISR cache splitting per locale.
+- Use `default: () => []` so `data.value` is never `null` -- tighter types, no `v-if` on existence.
+- On i18n pages, include `locale.value` in the key and add `Accept-Language: ${locale.value}` header.
+- On a hydration round-trip, `useApiFetch` rehydrates from the SSR payload -- no double fetch.
+
+```typescript
+const route = useRoute()
+const { locale } = useI18n()
+
+const { data: location, error } = await useApiFetch<Location>(
+  `/api/locations/${route.params.slug}`,
+  {
+    key: `location-${route.params.slug}-${locale.value}`,
+    headers: { 'Accept-Language': locale.value },
   },
-  /**
-   * Enable entrance animation
-   */
-  animated: {
-    type: Boolean,
-    default: true
-  },
-  /**
-   * Card size variant
-   */
-  size: {
-    type: String,
-    default: 'medium',
-    validator: (v) => ['small', 'medium', 'large'].includes(v)
+)
+
+if (error.value || !location.value) {
+  throw createError({ statusCode: 404, statusMessage: 'Not found', fatal: true })
+}
+```
+
+---
+
+## SSR Client-Only Rules (NON-NEGOTIABLE -- CLAUDE.md)
+
+The seven hard constraints. Reject code that violates these on review.
+
+1. **GSAP + ScrollTrigger** registered only in `app/plugins/gsap.client.ts`. Animations are declared inside a `gsap.context()` and reverted on unmount:
+   ```typescript
+   const ctx = $gsap.context(() => {
+     $gsap.from('.reveal', { y: 80, opacity: 0, scrollTrigger: { trigger: '.reveal' } })
+   })
+   onBeforeUnmount(() => ctx.revert())
+   ```
+   Without `revert()`, ScrollTrigger instances leak across navigations and phantom triggers fire on stale elements.
+
+2. **Lenis** registered in `app/plugins/lenis.client.ts`. Sync to GSAP's RAF -- never a second `requestAnimationFrame`:
+   ```typescript
+   gsap.ticker.add((time) => lenis.raf(time * 1000))
+   gsap.ticker.lagSmoothing(0)
+   ```
+   Stop Lenis on `/admin/*` and `/dashboard/*` so data tables and keyboard nav use native scroll.
+
+3. **No browser globals at `setup()` top-level**: `window`, `document`, `localStorage`, `sessionStorage`, `matchMedia`, `IntersectionObserver`, `ResizeObserver`, `getComputedStyle`. Move to `onMounted()`, event handlers, or `.client.ts` files.
+
+4. **No hydration-mismatch generators in templates**: `new Date().toLocaleString()`, `Math.random()`, `crypto.randomUUID()`, `navigator.language`. Pattern: `ref` + `onMounted` to assign, OR `<ClientOnly>` with matching-shape `#fallback`.
+
+5. **TipTap / canvas / WebGL** always inside `<ClientOnly>` with a matching-shape fallback (or in a page with `ssr: false`):
+   ```vue
+   <ClientOnly>
+     <TipTapEditor v-model="content" />
+     <template #fallback>
+       <div class="h-64 bg-surface/50 rounded-lg" aria-hidden="true" />
+     </template>
+   </ClientOnly>
+   ```
+
+6. **Location theming** via `useHead({ bodyAttrs: { 'data-location': slug } })` -- SSR-safe, zero JS at paint. CSS vars in `app/assets/css/main.css` cascade automatically.
+
+7. **Auth tokens in cookies only**: `httpOnly: true, secure: prod, sameSite: 'lax'/'strict'`. Never `localStorage`, never readable by JS, never in response bodies.
+
+---
+
+## Pure-Helper Extraction Pattern (TDC convention)
+
+When wrapping Nuxt auto-imports (`navigateTo`, `useNuxtApp`, `useState`, `useCookie`) for testability, extract pure decision logic into testable functions; the thin wrapper integrates them.
+
+**Why**: `mockNuxtImport` from `@nuxt/test-utils` works for component tests but is brittle for composables that wrap many auto-imports. Pure helpers are trivially unit-testable without a Nuxt test environment.
+
+**Example -- middleware**:
+
+```typescript
+// app/utils/auth-decisions.ts -- PURE, testable in isolation
+export interface AuthOutcome {
+  type: 'pass' | 'redirect'
+  to?: string
+}
+
+export function decideAuthOutcome(input: {
+  isAuthed: boolean
+  toFullPath: string
+}): AuthOutcome {
+  if (input.isAuthed) return { type: 'pass' }
+  return { type: 'redirect', to: buildLoginRedirect(input.toFullPath) }
+}
+
+export function buildLoginRedirect(toFullPath: string): string {
+  return `/auth/login?redirect=${encodeURIComponent(toFullPath)}`
+}
+```
+
+```typescript
+// app/middleware/auth.ts -- thin wrapper, integrates Nuxt auto-imports
+export default defineNuxtRouteMiddleware((to) => {
+  const auth = useAuthStore()
+  const outcome = decideAuthOutcome({
+    isAuthed: auth.isAuthenticated,
+    toFullPath: to.fullPath,
+  })
+  if (outcome.type === 'redirect') {
+    return navigateTo(outcome.to!, { replace: true })
   }
 })
+```
 
-// ============================================
-// Emits
-// ============================================
-const emit = defineEmits({
-  /**
-   * Emitted when card is selected
-   * @param {string} slug - Location slug
-   */
-  select: (slug) => typeof slug === 'string'
+The unit test imports `decideAuthOutcome` directly -- no Nuxt context needed. Phase 4 used the same pattern for `decideAdminOutcome`, `decideStaffOutcome`, and `buildAuthOps` in `useAuth`.
+
+---
+
+## Pinia (setup syntax only)
+
+```typescript
+// app/stores/auth.ts
+import { defineStore } from 'pinia'
+import type { User } from '~/types/user'
+
+export const useAuthStore = defineStore('auth', () => {
+  const user = ref<User | null>(null)
+  const isAuthenticated = computed(() => user.value !== null)
+  const isAdmin = computed(() => user.value?.role === 'admin')
+
+  const setUser = (u: User | null) => { user.value = u }
+  const clear = () => { user.value = null }
+
+  return { user, isAuthenticated, isAdmin, setUser, clear }
 })
+```
 
-// ============================================
-// Composables
-// ============================================
-const router = useRouter()
-const { t } = useI18n()
+**Consumer pattern**: destructure refs via `storeToRefs`, call actions directly:
 
-// ============================================
-// Refs
-// ============================================
-const cardRef = ref(null)
-const isHovered = ref(false)
-let animation = null
+```typescript
+import { storeToRefs } from 'pinia'
 
-// ============================================
-// Computed
-// ============================================
-const themeStyles = computed(() => ({
-  '--location-primary': props.location.theme?.primary_color || '#06b6d4',
-  '--location-secondary': props.location.theme?.secondary_color || '#8b5cf6',
-  '--location-accent': props.location.theme?.accent_color || '#22c55e',
-  '--location-dark': props.location.theme?.dark_color || '#0a0a0f',
-  '--location-gradient': props.location.theme?.css_gradient ||
-    'linear-gradient(135deg, var(--location-primary), var(--location-secondary))'
+const auth = useAuthStore()
+const { user, isAuthenticated } = storeToRefs(auth)  // reactive refs
+auth.clear()                                          // actions: not refs
+```
+
+---
+
+## Forms (vee-validate + zod)
+
+Same zod schema can be reused server-side via `readValidatedBody`.
+
+```vue
+<script setup lang="ts">
+import { z } from 'zod'
+import { toTypedSchema } from '@vee-validate/zod'
+import { useForm } from 'vee-validate'
+
+const schema = toTypedSchema(z.object({
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'Min 8 characters'),
 }))
 
-const sizeClasses = computed(() => ({
-  small: 'h-48',
-  medium: 'h-64',
-  large: 'h-96'
-}[props.size]))
-
-// ============================================
-// Methods
-// ============================================
-const handleClick = () => {
-  emit('select', props.location.slug)
-  router.push(`/locations/${props.location.slug}`)
-}
-
-const handleKeydown = (event) => {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    handleClick()
-  }
-}
-
-// ============================================
-// Lifecycle - Animation Setup
-// ============================================
-onMounted(() => {
-  if (props.animated && cardRef.value) {
-    // Initial state
-    gsap.set(cardRef.value, {
-      opacity: 0,
-      y: 50,
-      scale: 0.95
-    })
-
-    // Entrance animation
-    animation = gsap.to(cardRef.value, {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      duration: 0.8,
-      ease: 'power3.out',
-      scrollTrigger: {
-        trigger: cardRef.value,
-        start: 'top 85%',
-        toggleActions: 'play none none reverse'
-      }
-    })
-  }
+const { handleSubmit, errors, defineField, isSubmitting } = useForm({
+  validationSchema: schema,
 })
+const [email, emailAttrs] = defineField('email')
+const [password, passwordAttrs] = defineField('password')
 
-onUnmounted(() => {
-  // IMPORTANT: Always cleanup GSAP animations
-  if (animation) {
-    animation.kill()
-  }
+const { login } = useAuth()
+const localePath = useLocalePath()
+
+const onSubmit = handleSubmit(async (v) => {
+  await login(v.email, v.password)
+  await navigateTo(localePath('/dashboard'))
 })
 </script>
 
 <template>
-  <article
-    ref="cardRef"
-    :style="themeStyles"
-    :class="[
-      'location-card group relative overflow-hidden rounded-2xl cursor-pointer',
-      'transition-transform duration-300 hover:scale-[1.02]',
-      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-      'focus-visible:ring-[var(--location-primary)]',
-      sizeClasses
-    ]"
-    tabindex="0"
-    role="button"
-    :aria-label="t('locations.viewLocation', { name: location.name })"
-    @click="handleClick"
-    @keydown="handleKeydown"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
-  >
-    <!-- Background gradient -->
-    <div
-      class="absolute inset-0 bg-gradient-to-br opacity-80 transition-opacity duration-300 group-hover:opacity-100"
-      :style="{ background: 'var(--location-gradient)' }"
-    />
-
-    <!-- Dark overlay for text readability -->
-    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-    <!-- Content -->
-    <div class="relative h-full flex flex-col justify-end p-6 text-white">
-      <!-- Mood badge -->
-      <span
-        class="absolute top-4 right-4 px-3 py-1 text-xs font-medium rounded-full"
-        :class="{
-          'bg-cyan-500/20 text-cyan-300': location.mood_category === 'cosmic_tech',
-          'bg-amber-500/20 text-amber-300': location.mood_category === 'warm_intimate',
-          'bg-purple-500/20 text-purple-300': location.mood_category === 'hybrid'
-        }"
-      >
-        {{ t(`locations.mood.${location.mood_category}`) }}
-      </span>
-
-      <!-- Location name -->
-      <h3 class="text-2xl font-bold mb-2 drop-shadow-lg">
-        {{ location.name }}
-      </h3>
-
-      <!-- Tagline -->
-      <p
-        v-if="location.tagline"
-        class="text-sm text-white/80 line-clamp-2 mb-4"
-      >
-        {{ location.tagline }}
+  <form @submit="onSubmit" class="space-y-4">
+    <div>
+      <label for="email" class="sr-only">Email</label>
+      <input id="email" v-model="email" v-bind="emailAttrs" type="email"
+             :aria-invalid="!!errors.email"
+             :aria-describedby="errors.email ? 'email-err' : undefined" />
+      <p v-if="errors.email" id="email-err" role="alert" class="text-error text-sm">
+        {{ errors.email }}
       </p>
-
-      <!-- Meta info -->
-      <div class="flex items-center gap-4 text-sm text-white/70">
-        <span class="flex items-center gap-1">
-          <Users class="w-4 h-4" aria-hidden="true" />
-          {{ t('locations.capacity', { count: location.capacity }) }}
-        </span>
-        <span
-          v-if="location.slurl"
-          class="flex items-center gap-1"
-        >
-          <MapPin class="w-4 h-4" aria-hidden="true" />
-          {{ t('locations.inSecondLife') }}
-        </span>
-      </div>
     </div>
-
-    <!-- Hover glow effect -->
-    <div
-      class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-      :style="{
-        background: `radial-gradient(circle at 50% 50%, var(--location-primary), transparent 70%)`,
-        mixBlendMode: 'overlay'
-      }"
-    />
-  </article>
+    <button :disabled="isSubmitting" type="submit">Sign in</button>
+  </form>
 </template>
-
-<style scoped>
-.location-card {
-  /* Inherit theme variables from parent or use defaults */
-  --location-primary: v-bind('themeStyles["--location-primary"]');
-  --location-secondary: v-bind('themeStyles["--location-secondary"]');
-}
-
-/* Reduced motion preference */
-@media (prefers-reduced-motion: reduce) {
-  .location-card {
-    transition: none;
-  }
-}
-</style>
 ```
 
-### Phase 2: Composable Pattern
+---
 
-```javascript
-/**
- * useScrollAnimations - GSAP scroll animation utilities.
- *
- * Provides:
- * - Smooth scrolling with Lenis
- * - Hero parallax effects
- * - Reveal animations on scroll
- * - Parallax background effects
- *
- * @example
- * const { initSmoothScroll, animateHero } = useScrollAnimations()
- * onMounted(() => {
- *   initSmoothScroll()
- *   animateHero(heroRef.value)
- * })
- */
-import { ref, onUnmounted } from 'vue'
-import { gsap } from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import Lenis from '@studio-freight/lenis'
+## SEO (`useSeoMeta` on every public page)
 
-// Register GSAP plugins
-gsap.registerPlugin(ScrollTrigger)
+```typescript
+useSeoMeta({
+  title: location.value.name,
+  description: location.value.description,
+  ogTitle: location.value.name,
+  ogDescription: location.value.description,
+  ogImage: location.value.hero_image,
+  ogType: 'website',
+  twitterCard: 'summary_large_image',
+})
+```
 
-export function useScrollAnimations() {
-  // Track all animations for cleanup
-  const animations = ref([])
-  const triggers = ref([])
-  let lenis = null
+For rich results add `useSchemaOrg([defineLocalBusiness({ ... })])` (or `defineEvent`, `defineMusicGroup`, `defineArticle`).
 
-  /**
-   * Initialize Lenis smooth scrolling.
-   * Call once on app/page mount.
-   */
-  const initSmoothScroll = () => {
-    lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-      touchMultiplier: 2
-    })
+`@nuxtjs/sitemap` auto-emits hreflang tags for the four locales when `runtimeConfig.public.siteUrl` is set.
 
-    // Connect Lenis to GSAP ScrollTrigger
-    lenis.on('scroll', ScrollTrigger.update)
+---
 
-    gsap.ticker.add((time) => {
-      lenis.raf(time * 1000)
-    })
+## Location Theming
 
-    gsap.ticker.lagSmoothing(0)
-  }
+Apply via composable. The composable uses `useHead` so the attribute is set during SSR and flows into the first HTML paint -- no flash.
 
-  /**
-   * Destroy Lenis instance.
-   */
-  const destroySmoothScroll = () => {
-    if (lenis) {
-      lenis.destroy()
-      lenis = null
-    }
-  }
+```typescript
+// app/composables/useLocationTheme.ts
+import type { MaybeRefOrGetter } from 'vue'
+import { toValue } from 'vue'
 
-  /**
-   * Create hero section parallax animation.
-   *
-   * @param {HTMLElement} element - Hero container element
-   * @param {Object} options - Animation options
-   */
-  const animateHero = (element, options = {}) => {
-    if (!element) return
-
-    const {
-      videoSelector = '.hero-video',
-      textSelector = '.hero-text',
-      scaleEnd = 1.2,
-      opacityEnd = 0
-    } = options
-
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: element,
-        start: 'top top',
-        end: 'bottom top',
-        scrub: true,
-        pin: options.pin ?? false
-      }
-    })
-
-    const video = element.querySelector(videoSelector)
-    const text = element.querySelector(textSelector)
-
-    if (video) {
-      tl.to(video, { scale: scaleEnd, opacity: opacityEnd }, 0)
-    }
-
-    if (text) {
-      tl.to(text, { y: -100, opacity: opacityEnd }, 0)
-    }
-
-    animations.value.push(tl)
-    triggers.value.push(tl.scrollTrigger)
-
-    return tl
-  }
-
-  /**
-   * Create staggered reveal animation on scroll.
-   *
-   * @param {HTMLElement|HTMLElement[]} elements - Elements to animate
-   * @param {Object} options - Animation options
-   */
-  const animateReveal = (elements, options = {}) => {
-    if (!elements) return
-
-    const elementsArray = Array.isArray(elements) ? elements : [elements]
-    if (elementsArray.length === 0) return
-
-    const {
-      y = 100,
-      opacity = 0,
-      duration = 1,
-      stagger = 0.2,
-      ease = 'power3.out',
-      start = 'top 85%',
-      once = true
-    } = options
-
-    const anim = gsap.from(elementsArray, {
-      y,
-      opacity,
-      duration,
-      stagger,
-      ease,
-      scrollTrigger: {
-        trigger: elementsArray[0],
-        start,
-        toggleActions: once ? 'play none none none' : 'play reverse play reverse'
-      }
-    })
-
-    animations.value.push(anim)
-    if (anim.scrollTrigger) {
-      triggers.value.push(anim.scrollTrigger)
-    }
-
-    return anim
-  }
-
-  /**
-   * Create parallax effect for element.
-   *
-   * @param {HTMLElement} element - Element to animate
-   * @param {number} speed - Parallax speed (0-1)
-   */
-  const animateParallax = (element, speed = 0.5) => {
-    if (!element) return
-
-    const anim = gsap.to(element, {
-      y: () => window.innerHeight * speed,
-      ease: 'none',
-      scrollTrigger: {
-        trigger: element,
-        start: 'top bottom',
-        end: 'bottom top',
-        scrub: true
-      }
-    })
-
-    animations.value.push(anim)
-    triggers.value.push(anim.scrollTrigger)
-
-    return anim
-  }
-
-  /**
-   * Create fade-in animation.
-   *
-   * @param {HTMLElement} element - Element to animate
-   * @param {Object} options - Animation options
-   */
-  const animateFadeIn = (element, options = {}) => {
-    if (!element) return
-
-    const {
-      duration = 0.8,
-      delay = 0,
-      ease = 'power2.out'
-    } = options
-
-    return gsap.fromTo(element,
-      { opacity: 0 },
-      { opacity: 1, duration, delay, ease }
-    )
-  }
-
-  /**
-   * Cleanup all animations and triggers.
-   * MUST be called in onUnmounted.
-   */
-  const cleanup = () => {
-    // Kill all ScrollTriggers
-    triggers.value.forEach(trigger => {
-      if (trigger) trigger.kill()
-    })
-    triggers.value = []
-
-    // Kill all animations
-    animations.value.forEach(anim => {
-      if (anim) anim.kill()
-    })
-    animations.value = []
-
-    // Destroy Lenis
-    destroySmoothScroll()
-  }
-
-  // Auto cleanup on unmount
-  onUnmounted(cleanup)
-
-  return {
-    // Smooth scroll
-    initSmoothScroll,
-    destroySmoothScroll,
-
-    // Animations
-    animateHero,
-    animateReveal,
-    animateParallax,
-    animateFadeIn,
-
-    // Manual cleanup
-    cleanup
-  }
+export function useLocationTheme(slug: MaybeRefOrGetter<string | null | undefined>) {
+  useHead(() => ({
+    bodyAttrs: {
+      'data-location': toValue(slug) ?? '',
+    },
+  }))
 }
 ```
 
-### Phase 3: Theme Composable
+Consumer:
 
-```javascript
-/**
- * useTheme - Location-based theming system.
- *
- * Manages CSS custom properties based on current location.
- *
- * @example
- * const { setLocationTheme, clearTheme } = useTheme()
- * setLocationTheme(location)
- */
-import { ref, watch, onUnmounted } from 'vue'
+```typescript
+useLocationTheme(computed(() => location.value?.slug))
+```
 
-// Default dark theme
-const DEFAULT_THEME = {
-  '--color-bg': '#0a0a0f',
-  '--color-surface': '#141420',
-  '--color-text': '#ffffff',
-  '--color-text-muted': '#a0a0b0',
-  '--color-primary': '#06b6d4',
-  '--color-secondary': '#8b5cf6',
-  '--color-accent': '#22c55e'
+CSS vars in `app/assets/css/main.css` cascade automatically:
+
+```css
+@theme {
+  --color-primary: var(--tdc-color-primary);
+  --color-error:   var(--tdc-color-error); /* semantic, palette-agnostic */
 }
 
-// Location theme presets (from mood guide)
-const LOCATION_THEMES = {
-  dreamerscave: {
-    '--color-primary': '#0891b2',
-    '--color-secondary': '#06b6d4',
-    '--color-accent': '#22c55e',
-    '--color-accent-warm': '#eab308',
-    '--color-dark': '#0c1222',
-    '--gradient-hero': 'linear-gradient(135deg, #0891b2, #22c55e, #eab308)'
-  },
-  dreamerscave2: {
-    '--color-primary': '#1e3a8a',
-    '--color-secondary': '#3b82f6',
-    '--color-accent': '#8b5cf6',
-    '--color-accent-warm': '#ec4899',
-    '--color-dark': '#0f172a',
-    '--gradient-hero': 'linear-gradient(135deg, #1e3a8a, #8b5cf6, #ec4899)'
-  },
-  dreamvision: {
-    '--color-primary': '#06b6d4',
-    '--color-secondary': '#22c55e',
-    '--color-accent': '#facc15',
-    '--color-glow': '#ffffff',
-    '--color-dark': '#020617',
-    '--gradient-hero': 'linear-gradient(135deg, #06b6d4, #22c55e, #facc15)'
-  },
-  evanescence: {
-    '--color-primary': '#fbbf24',
-    '--color-secondary': '#0ea5e9',
-    '--color-accent': '#06b6d4',
-    '--color-glow': '#fef3c7',
-    '--color-dark': '#0c1222',
-    '--gradient-hero': 'radial-gradient(ellipse at center, #fef3c7, #fbbf24, #0ea5e9, #0c1222)'
-  },
-  livemagic: {
-    '--color-primary': '#dc2626',
-    '--color-secondary': '#f97316',
-    '--color-accent': '#8b5cf6',
-    '--color-accent-green': '#22c55e',
-    '--color-dark': '#030712',
-    '--gradient-hero': 'linear-gradient(135deg, #dc2626, #f97316, #8b5cf6)'
-  },
-  lounge: {
-    '--color-primary': '#a855f7',
-    '--color-secondary': '#ec4899',
-    '--color-accent': '#f59e0b',
-    '--color-concrete': '#57534e',
-    '--color-dark': '#1c1917',
-    '--gradient-hero': 'linear-gradient(135deg, #a855f7, #ec4899, #f59e0b)'
-  },
-  arquipelago: {
-    '--color-primary': '#14b8a6',
-    '--color-secondary': '#92400e',
-    '--color-accent': '#f97316',
-    '--color-water': '#06b6d4',
-    '--color-dark': '#134e4a',
-    '--gradient-hero': 'linear-gradient(135deg, #14b8a6, #06b6d4, #f97316)'
-  },
-  noahsark: {
-    '--color-primary': '#d97706',
-    '--color-secondary': '#92400e',
-    '--color-accent': '#14b8a6',
-    '--color-gold': '#fbbf24',
-    '--color-dark': '#451a03',
-    '--gradient-hero': 'linear-gradient(135deg, #d97706, #fbbf24, #14b8a6)'
-  },
-  jazzclub: {
-    '--color-primary': '#92400e',
-    '--color-secondary': '#78350f',
-    '--color-accent': '#14b8a6',
-    '--color-gold': '#d97706',
-    '--color-dark': '#1c1917',
-    '--gradient-hero': 'linear-gradient(135deg, #92400e, #991b1b, #14b8a6)'
+@layer base {
+  :root {
+    --tdc-color-primary: #0891b2;
+    --tdc-color-error: #ef4444;
   }
-}
-
-export function useTheme() {
-  const currentTheme = ref(null)
-  const currentLocation = ref(null)
-
-  /**
-   * Apply CSS custom properties to document root.
-   *
-   * @param {Object} theme - Theme object with CSS properties
-   */
-  const applyTheme = (theme) => {
-    const root = document.documentElement
-
-    // Apply each property
-    Object.entries(theme).forEach(([key, value]) => {
-      root.style.setProperty(key, value)
-    })
-
-    currentTheme.value = theme
+  [data-location="dreamerscave"] {
+    --tdc-color-primary: #0891b2;
+    --tdc-color-secondary: #06b6d4;
+    --tdc-color-accent: #22c55e;
   }
-
-  /**
-   * Set theme based on location.
-   *
-   * @param {Object|string} location - Location object or slug
-   */
-  const setLocationTheme = (location) => {
-    const slug = typeof location === 'string' ? location : location?.slug
-
-    if (!slug) {
-      clearTheme()
-      return
-    }
-
-    // Normalize slug (remove spaces, lowercase)
-    const normalizedSlug = slug.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-    // Get preset or use location's custom theme
-    let theme = LOCATION_THEMES[normalizedSlug]
-
-    // If location has custom theme data, use it
-    if (typeof location === 'object' && location.theme) {
-      theme = {
-        '--color-primary': location.theme.primary_color,
-        '--color-secondary': location.theme.secondary_color,
-        '--color-accent': location.theme.accent_color,
-        '--color-dark': location.theme.dark_color,
-        '--gradient-hero': location.theme.css_gradient
-      }
-    }
-
-    if (theme) {
-      // Merge with defaults
-      applyTheme({ ...DEFAULT_THEME, ...theme })
-      currentLocation.value = slug
-
-      // Set data attribute for CSS targeting
-      document.documentElement.setAttribute('data-location', normalizedSlug)
-    }
-  }
-
-  /**
-   * Clear location theme and restore defaults.
-   */
-  const clearTheme = () => {
-    applyTheme(DEFAULT_THEME)
-    currentLocation.value = null
-    document.documentElement.removeAttribute('data-location')
-  }
-
-  /**
-   * Get current theme values.
-   */
-  const getTheme = () => currentTheme.value
-
-  // Cleanup on unmount
-  onUnmounted(() => {
-    clearTheme()
-  })
-
-  return {
-    currentTheme,
-    currentLocation,
-    setLocationTheme,
-    clearTheme,
-    getTheme,
-    LOCATION_THEMES
-  }
+  /* ... 7 more location blocks */
 }
 ```
 
-### Phase 4: Pinia Store Pattern
+Slug convention: lowercase, no spaces, no diacritics (`thelounge`, `arquipelago`, `noahsark`, `jazzclub`).
 
-```javascript
-/**
- * Locations Store - Manages location data and theming.
- */
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { useApi } from '@/composables/useApi'
-import { useTheme } from '@/composables/useTheme'
+---
 
-export const useLocationsStore = defineStore('locations', () => {
-  // ============================================
-  // State
-  // ============================================
-  const locations = ref([])
-  const currentLocation = ref(null)
-  const loading = ref(false)
-  const error = ref(null)
+## Server Routes (BFF) -- Phase 4 patterns
 
-  // ============================================
-  // Composables
-  // ============================================
-  const api = useApi()
-  const { setLocationTheme, clearTheme } = useTheme()
+Only `/api/auth/**` and `/api/revalidate` live as Nitro handlers; everything else passes through to Flask.
 
-  // ============================================
-  // Getters (computed)
-  // ============================================
-  const locationsByMood = computed(() => {
-    const grouped = {
-      cosmic_tech: [],
-      warm_intimate: [],
-      hybrid: []
-    }
+### Login handler (canonical)
 
-    locations.value.forEach(loc => {
-      if (grouped[loc.mood_category]) {
-        grouped[loc.mood_category].push(loc)
-      }
-    })
+```typescript
+// frontend/server/api/auth/login.post.ts
+import { z } from 'zod'
 
-    return grouped
-  })
+const schema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+})
 
-  const activeLocations = computed(() =>
-    locations.value.filter(loc => loc.is_active)
+export default defineEventHandler(async (event) => {
+  const body = await readValidatedBody(event, (i) => schema.parse(i))
+  const data = await flaskFetch<{ access: string; refresh: string; user: User }>(
+    '/api/auth/login',
+    event,
+    { method: 'POST', body },
   )
+  setAccessCookie(event, data.access)
+  setRefreshCookie(event, data.refresh)
+  return { user: data.user }
+})
+```
 
-  const getBySlug = computed(() => (slug) =>
-    locations.value.find(loc => loc.slug === slug)
-  )
+### `flaskFetch` resilient pattern
 
-  // ============================================
-  // Actions
-  // ============================================
+`flaskFetch` reads `$fetch` and `useRuntimeConfig` via the resilient stub-first / module-fallback pattern (Phase 3 TD-009 fix, extended in Phase 4 with `nitropack/runtime` fallback) so unit tests can stub via `globalThis` without Nitro having to expose those names on the global. See `frontend/server/utils/flask-client.ts`.
 
-  /**
-   * Fetch all locations from API.
-   *
-   * @param {string} lang - Language code
-   */
-  async function fetchAll(lang = 'en') {
-    loading.value = true
-    error.value = null
+### `auth-forward` middleware
 
-    try {
-      const response = await api.get('/locations', { params: { lang } })
-      locations.value = response.data
-    } catch (err) {
-      error.value = err.message
-      console.error('Failed to fetch locations:', err)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * Fetch single location by slug.
-   *
-   * @param {string} slug - Location slug
-   * @param {string} lang - Language code
-   */
-  async function fetchBySlug(slug, lang = 'en') {
-    loading.value = true
-    error.value = null
-
-    try {
-      const response = await api.get(`/locations/${slug}`, { params: { lang } })
-      currentLocation.value = response.data
-
-      // Apply location theme
-      setLocationTheme(response.data)
-
-      return response.data
-    } catch (err) {
-      error.value = err.message
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * Clear current location and theme.
-   */
-  function clearCurrent() {
-    currentLocation.value = null
-    clearTheme()
-  }
-
-  /**
-   * Reset store state.
-   */
-  function $reset() {
-    locations.value = []
-    currentLocation.value = null
-    loading.value = false
-    error.value = null
-    clearTheme()
-  }
-
-  return {
-    // State
-    locations,
-    currentLocation,
-    loading,
-    error,
-
-    // Getters
-    locationsByMood,
-    activeLocations,
-    getBySlug,
-
-    // Actions
-    fetchAll,
-    fetchBySlug,
-    clearCurrent,
-    $reset
+```typescript
+// frontend/server/middleware/auth-forward.ts
+export default defineEventHandler((event) => {
+  const access = getCookie(event, 'tdc_access')
+  if (access) {
+    event.context.flaskHeaders = { Authorization: `Bearer ${access}` }
   }
 })
 ```
 
-### Phase 5: API Composable
+`flaskFetch` then merges `event.context.flaskHeaders` into every outbound call -- the user's identity propagates server-to-server.
 
-```javascript
-/**
- * useApi - API client composable.
- *
- * Features:
- * - Axios instance with interceptors
- * - JWT token handling
- * - Language header injection
- * - Error transformation
- */
-import { ref } from 'vue'
-import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { useI18n } from 'vue-i18n'
+---
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+## Forbidden patterns -- reject on sight
 
-export function useApi() {
-  const loading = ref(false)
-  const error = ref(null)
+| Don't | Do | Why |
+|---|---|---|
+| `localStorage.setItem('jwt', ...)` | HttpOnly cookie via `server/api/auth/**` | XSS token theft |
+| `axios.get(...)` | `useApiFetch` / `useFetch` / `$fetch` | Nuxt-native, SSR-aware |
+| Pinia options API | Setup syntax | Project standard |
+| `defineProps({ foo: { type: String, ... } })` | `defineProps<{ foo: string }>()` | Type-form props |
+| `any` | Define or import a real type | TS strict |
+| `gsap.from(...)` without `gsap.context()` | `gsap.context(() => gsap.from(...))` + `revert()` | ScrollTrigger leaks |
+| Standalone Lenis RAF | `gsap.ticker.add(lenis.raf)` | Double-RAF drift |
+| Hardcoded UI text | `t('key')` | i18n mandate |
+| `<NuxtLink to="/locations">` | `<NuxtLink :to="localePath('/locations')">` | Locale-preserving links |
+| `text-red-400` on errors | `text-error` (semantic token) | Palette-agnostic |
+| TipTap / canvas without `<ClientOnly>` | `<ClientOnly>` with matching-shape `#fallback` | SSR crash |
+| `console.log` committed | Remove; `logger.info` only on server routes | Noise + perf |
+| `nitro.devProxy` catch-all on `/api` | `routeRules.proxy` for `/api/**` | BFF precedence: catch-all hijacks `/api/auth` |
+| `useState('auth', ...)` (key collision risk) | Pinia store | App-wide state belongs in stores |
 
-  // Create axios instance
-  const client = axios.create({
-    baseURL: BASE_URL,
-    timeout: 10000,
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
+---
 
-  // Request interceptor
-  client.interceptors.request.use((config) => {
-    const authStore = useAuthStore()
-    const { locale } = useI18n()
+## Common Snippets
 
-    // Add JWT token if available
-    if (authStore.token) {
-      config.headers.Authorization = `Bearer ${authStore.token}`
-    }
-
-    // Add language header
-    config.headers['Accept-Language'] = locale.value
-
-    return config
-  })
-
-  // Response interceptor
-  client.interceptors.response.use(
-    (response) => {
-      // API returns { success, data, meta }
-      if (response.data?.success) {
-        return response.data
-      }
-      return response.data
-    },
-    (err) => {
-      const authStore = useAuthStore()
-
-      // Handle 401 - Unauthorized
-      if (err.response?.status === 401) {
-        authStore.logout()
-      }
-
-      // Transform error
-      const message = err.response?.data?.error || err.message || 'Unknown error'
-      error.value = message
-
-      return Promise.reject(new Error(message))
-    }
-  )
-
-  /**
-   * GET request.
-   */
-  const get = async (url, config = {}) => {
-    loading.value = true
-    error.value = null
-    try {
-      return await client.get(url, config)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * POST request.
-   */
-  const post = async (url, data = {}, config = {}) => {
-    loading.value = true
-    error.value = null
-    try {
-      return await client.post(url, data, config)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * PUT request.
-   */
-  const put = async (url, data = {}, config = {}) => {
-    loading.value = true
-    error.value = null
-    try {
-      return await client.put(url, data, config)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  /**
-   * DELETE request.
-   */
-  const del = async (url, config = {}) => {
-    loading.value = true
-    error.value = null
-    try {
-      return await client.delete(url, config)
-    } finally {
-      loading.value = false
-    }
-  }
-
-  return {
-    client,
-    loading,
-    error,
-    get,
-    post,
-    put,
-    del
-  }
-}
-```
-
-### Phase 6: TipTap WYSIWYG Editor
+### Canonical SFC
 
 ```vue
-<script setup>
-/**
- * WysiwygEditor - TipTap rich text editor wrapper.
- *
- * Features:
- * - Rich text formatting
- * - Image insertion
- * - Link editing
- * - HTML output
- */
-import { ref, watch, onBeforeUnmount } from 'vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
-import Link from '@tiptap/extension-link'
-import Placeholder from '@tiptap/extension-placeholder'
-import {
-  Bold, Italic, Strikethrough, Code,
-  List, ListOrdered, Quote, Undo, Redo,
-  Link as LinkIcon, Image as ImageIcon
-} from 'lucide-vue-next'
+<script setup lang="ts">
+import type { Location } from '~/types/location'
+import { Heart } from 'lucide-vue-next'
 
-const props = defineProps({
-  modelValue: {
-    type: String,
-    default: ''
-  },
-  placeholder: {
-    type: String,
-    default: 'Write something...'
-  },
-  editable: {
-    type: Boolean,
-    default: true
-  }
-})
+const props = defineProps<{ location: Location; variant?: 'compact' | 'full' }>()
+const emit = defineEmits<{ select: [id: number]; 'update:favorite': [v: boolean] }>()
 
-const emit = defineEmits(['update:modelValue'])
+const localePath = useLocalePath()
+const auth = useAuthStore()
 
-// ============================================
-// Editor Setup
-// ============================================
-const editor = useEditor({
-  content: props.modelValue,
-  editable: props.editable,
-  extensions: [
-    StarterKit,
-    Image.configure({
-      HTMLAttributes: {
-        class: 'rounded-lg max-w-full'
-      }
-    }),
-    Link.configure({
-      openOnClick: false,
-      HTMLAttributes: {
-        class: 'text-cyan-400 hover:text-cyan-300 underline'
-      }
-    }),
-    Placeholder.configure({
-      placeholder: props.placeholder
-    })
-  ],
-  onUpdate: ({ editor }) => {
-    emit('update:modelValue', editor.getHTML())
-  }
-})
+const isFavorite = ref(false)
+const href = computed(() => localePath(`/locations/${props.location.slug}`))
 
-// Sync prop changes
-watch(() => props.modelValue, (value) => {
-  if (editor.value && value !== editor.value.getHTML()) {
-    editor.value.commands.setContent(value, false)
-  }
-})
-
-// Cleanup
-onBeforeUnmount(() => {
-  editor.value?.destroy()
-})
-
-// ============================================
-// Toolbar Actions
-// ============================================
-const addImage = () => {
-  const url = window.prompt('Image URL')
-  if (url) {
-    editor.value.chain().focus().setImage({ src: url }).run()
-  }
+const toggle = () => {
+  isFavorite.value = !isFavorite.value
+  emit('update:favorite', isFavorite.value)
 }
-
-const addLink = () => {
-  const url = window.prompt('Link URL')
-  if (url) {
-    editor.value.chain().focus().setLink({ href: url }).run()
-  }
-}
-
-// Toolbar button config
-const toolbarButtons = [
-  { icon: Bold, action: () => editor.value.chain().focus().toggleBold().run(), isActive: () => editor.value?.isActive('bold'), label: 'Bold' },
-  { icon: Italic, action: () => editor.value.chain().focus().toggleItalic().run(), isActive: () => editor.value?.isActive('italic'), label: 'Italic' },
-  { icon: Strikethrough, action: () => editor.value.chain().focus().toggleStrike().run(), isActive: () => editor.value?.isActive('strike'), label: 'Strikethrough' },
-  { icon: Code, action: () => editor.value.chain().focus().toggleCode().run(), isActive: () => editor.value?.isActive('code'), label: 'Code' },
-  { type: 'divider' },
-  { icon: List, action: () => editor.value.chain().focus().toggleBulletList().run(), isActive: () => editor.value?.isActive('bulletList'), label: 'Bullet list' },
-  { icon: ListOrdered, action: () => editor.value.chain().focus().toggleOrderedList().run(), isActive: () => editor.value?.isActive('orderedList'), label: 'Numbered list' },
-  { icon: Quote, action: () => editor.value.chain().focus().toggleBlockquote().run(), isActive: () => editor.value?.isActive('blockquote'), label: 'Quote' },
-  { type: 'divider' },
-  { icon: LinkIcon, action: addLink, isActive: () => editor.value?.isActive('link'), label: 'Add link' },
-  { icon: ImageIcon, action: addImage, label: 'Add image' },
-  { type: 'divider' },
-  { icon: Undo, action: () => editor.value.chain().focus().undo().run(), label: 'Undo' },
-  { icon: Redo, action: () => editor.value.chain().focus().redo().run(), label: 'Redo' }
-]
 </script>
 
 <template>
-  <div class="wysiwyg-editor border border-white/10 rounded-lg overflow-hidden bg-surface">
-    <!-- Toolbar -->
-    <div
-      v-if="editable"
-      class="flex flex-wrap gap-1 p-2 border-b border-white/10 bg-black/20"
-      role="toolbar"
-      aria-label="Text formatting"
-    >
-      <template v-for="(btn, index) in toolbarButtons" :key="index">
-        <div
-          v-if="btn.type === 'divider'"
-          class="w-px h-6 bg-white/10 mx-1"
-          role="separator"
-        />
-        <button
-          v-else
-          type="button"
-          :class="[
-            'p-2 rounded hover:bg-white/10 transition-colors',
-            btn.isActive?.() ? 'bg-white/20 text-cyan-400' : 'text-white/70'
-          ]"
-          :aria-label="btn.label"
-          :aria-pressed="btn.isActive?.()"
-          @click="btn.action"
-        >
-          <component :is="btn.icon" class="w-4 h-4" />
-        </button>
-      </template>
-    </div>
-
-    <!-- Editor Content -->
-    <EditorContent
-      :editor="editor"
-      class="prose prose-invert max-w-none p-4 min-h-[200px] focus:outline-none"
-    />
-  </div>
+  <NuxtLink :to="href" class="block">
+    <h3>{{ location.name }}</h3>
+    <button v-if="auth.isAuthenticated" @click.prevent="toggle" :aria-pressed="isFavorite">
+      <Heart :class="isFavorite ? 'fill-current' : ''" />
+    </button>
+  </NuxtLink>
 </template>
-
-<style>
-/* TipTap placeholder styling */
-.ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  float: left;
-  color: #6b7280;
-  pointer-events: none;
-  height: 0;
-}
-
-/* Focus state */
-.ProseMirror:focus {
-  outline: none;
-}
-</style>
 ```
 
-### Phase 7: Router with Lazy Loading
-
-```javascript
-/**
- * Vue Router configuration with lazy loading.
- */
-import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-
-// Lazy load views
-const LandingPage = () => import('@/views/LandingPage.vue')
-const LocationsPage = () => import('@/views/LocationsPage.vue')
-const LocationDetailPage = () => import('@/views/LocationDetailPage.vue')
-const EventsPage = () => import('@/views/EventsPage.vue')
-const ArtistsPage = () => import('@/views/ArtistsPage.vue')
-const BlogPage = () => import('@/views/BlogPage.vue')
-const LoginPage = () => import('@/views/LoginPage.vue')
-const RegisterPage = () => import('@/views/RegisterPage.vue')
-const ProfilePage = () => import('@/views/ProfilePage.vue')
-const ExclusivePage = () => import('@/views/ExclusivePage.vue')
-
-// Admin views (separate chunk)
-const AdminDashboard = () => import(
-  /* webpackChunkName: "admin" */
-  '@/views/admin/DashboardPage.vue'
-)
-const AdminLocations = () => import(
-  /* webpackChunkName: "admin" */
-  '@/views/admin/LocationsAdminPage.vue'
-)
-
-const routes = [
-  // Public routes
-  {
-    path: '/',
-    name: 'home',
-    component: LandingPage,
-    meta: { title: 'The Dreamer\'s Cave' }
-  },
-  {
-    path: '/locations',
-    name: 'locations',
-    component: LocationsPage,
-    meta: { title: 'Locations' }
-  },
-  {
-    path: '/locations/:slug',
-    name: 'location-detail',
-    component: LocationDetailPage,
-    props: true,
-    meta: { title: 'Location' }
-  },
-  {
-    path: '/events',
-    name: 'events',
-    component: EventsPage,
-    meta: { title: 'Events' }
-  },
-  {
-    path: '/artists',
-    name: 'artists',
-    component: ArtistsPage,
-    meta: { title: 'Artists' }
-  },
-  {
-    path: '/blog',
-    name: 'blog',
-    component: BlogPage,
-    meta: { title: 'Blog' }
-  },
-
-  // Auth routes
-  {
-    path: '/login',
-    name: 'login',
-    component: LoginPage,
-    meta: { title: 'Login', guest: true }
-  },
-  {
-    path: '/register',
-    name: 'register',
-    component: RegisterPage,
-    meta: { title: 'Register', guest: true }
-  },
-
-  // Protected routes
-  {
-    path: '/profile',
-    name: 'profile',
-    component: ProfilePage,
-    meta: { title: 'Profile', requiresAuth: true }
-  },
-  {
-    path: '/exclusive',
-    name: 'exclusive',
-    component: ExclusivePage,
-    meta: { title: 'Exclusive Content', requiresAuth: true, requiresPatreon: true }
-  },
-
-  // Admin routes
-  {
-    path: '/admin',
-    meta: { requiresAuth: true, requiresAdmin: true },
-    children: [
-      {
-        path: '',
-        name: 'admin-dashboard',
-        component: AdminDashboard,
-        meta: { title: 'Dashboard' }
-      },
-      {
-        path: 'locations',
-        name: 'admin-locations',
-        component: AdminLocations,
-        meta: { title: 'Manage Locations' }
-      }
-      // ... more admin routes
-    ]
-  },
-
-  // 404
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'not-found',
-    component: () => import('@/views/NotFoundPage.vue'),
-    meta: { title: 'Not Found' }
-  }
-]
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
-  scrollBehavior(to, from, savedPosition) {
-    if (savedPosition) {
-      return savedPosition
-    }
-    if (to.hash) {
-      return { el: to.hash, behavior: 'smooth' }
-    }
-    return { top: 0, behavior: 'smooth' }
-  }
-})
-
-// Navigation guards
-router.beforeEach(async (to, from, next) => {
-  const authStore = useAuthStore()
-
-  // Update page title
-  document.title = to.meta.title
-    ? `${to.meta.title} | The Dreamer's Cave`
-    : 'The Dreamer\'s Cave'
-
-  // Auth checks
-  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    return next({ name: 'login', query: { redirect: to.fullPath } })
-  }
-
-  if (to.meta.guest && authStore.isAuthenticated) {
-    return next({ name: 'home' })
-  }
-
-  if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    return next({ name: 'home' })
-  }
-
-  next()
-})
-
-export default router
-```
-
-### Phase 8: Tailwind Configuration
-
-```javascript
-// tailwind.config.js
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    './index.html',
-    './src/**/*.{vue,js,ts,jsx,tsx}'
-  ],
-  darkMode: 'class',
-  theme: {
-    extend: {
-      colors: {
-        // Base dark theme
-        bg: 'var(--color-bg, #0a0a0f)',
-        surface: 'var(--color-surface, #141420)',
-        'text-primary': 'var(--color-text, #ffffff)',
-        'text-muted': 'var(--color-text-muted, #a0a0b0)',
-
-        // Dynamic theme colors (from CSS vars)
-        primary: 'var(--color-primary, #06b6d4)',
-        secondary: 'var(--color-secondary, #8b5cf6)',
-        accent: 'var(--color-accent, #22c55e)'
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Space Grotesk', 'system-ui', 'sans-serif']
-      },
-      animation: {
-        'fade-in': 'fadeIn 0.5s ease-out',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'pulse-glow': 'pulseGlow 2s ease-in-out infinite'
-      },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' }
-        },
-        slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' }
-        },
-        pulseGlow: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.5' }
-        }
-      }
-    }
-  },
-  plugins: [
-    require('@tailwindcss/typography'),
-    require('@tailwindcss/forms')
-  ]
-}
-```
-
-### Phase 9: Accessibility Checklist
-
-Every component MUST include:
+### `<ClientOnly>` with matching-shape fallback
 
 ```vue
-<!-- Accessibility requirements -->
-
-<!-- 1. Keyboard navigation -->
-<button
-  @click="handleClick"
-  @keydown.enter="handleClick"
-  @keydown.space.prevent="handleClick"
->
-
-<!-- 2. ARIA labels -->
-<button aria-label="Close modal">
-  <XIcon aria-hidden="true" />
-</button>
-
-<!-- 3. Focus management -->
-<div
-  ref="modalRef"
-  tabindex="-1"
-  @vue:mounted="modalRef.focus()"
->
-
-<!-- 4. Screen reader text -->
-<span class="sr-only">Loading, please wait</span>
-
-<!-- 5. Reduced motion -->
-<style scoped>
-@media (prefers-reduced-motion: reduce) {
-  .animated-element {
-    animation: none;
-    transition: none;
-  }
-}
-</style>
-
-<!-- 6. Color contrast (WCAG AA) -->
-<!-- Use text-white on dark backgrounds -->
-<!-- Use text-black on light backgrounds -->
-
-<!-- 7. Focus visible styles -->
-<button class="focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none">
+<ClientOnly>
+  <TipTapEditor v-model="content" />
+  <template #fallback>
+    <div class="h-64 bg-surface/50 rounded-lg" aria-hidden="true" />
+  </template>
+</ClientOnly>
 ```
 
-### Phase 10: Git Workflow
+### GSAP composable with cleanup
 
-After frontend code changes:
+```typescript
+// app/composables/useScrollAnimation.ts
+export function useScrollAnimation() {
+  const ctx = ref<ReturnType<typeof import('gsap').gsap.context> | null>(null)
 
-1. **Lint and format:**
-   ```bash
-   cd frontend
-   npm run lint
-   npm run format
-   ```
+  const animateReveal = (selector: string) => {
+    if (!import.meta.client) return
+    const { $gsap } = useNuxtApp() as unknown as { $gsap: typeof import('gsap').gsap }
+    ctx.value = $gsap.context(() => {
+      $gsap.from(selector, {
+        y: 80, opacity: 0, duration: 0.8, stagger: 0.1,
+        scrollTrigger: { trigger: selector, start: 'top 80%' },
+      })
+    })
+  }
 
-2. **Build check:**
-   ```bash
-   npm run build
-   ```
+  onBeforeUnmount(() => ctx.value?.revert())
+  return { animateReveal }
+}
+```
 
-3. **Review changes:**
-   ```bash
-   git status && git diff
-   ```
+### `definePageMeta` combinations
 
-4. **Stage and commit:**
-   ```bash
-   git add frontend/
-   git commit -m "feat(frontend): [description]
+```typescript
+// Public page -- no meta needed (default layout, SSR on)
 
-   - Specific changes made
+// Auth-gated user area
+definePageMeta({ layout: 'dashboard', middleware: ['auth'] })
 
-   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+// Admin-only
+definePageMeta({ layout: 'admin', middleware: ['auth', 'admin'] })
 
-   Co-Authored-By: Claude <noreply@anthropic.com>"
-   ```
+// Staff (or admin)
+definePageMeta({ layout: 'admin', middleware: ['auth', 'staff'] })
 
-5. **Push (only if explicitly requested)**
+// Login / register (no auth middleware -- the page IS the entry point)
+definePageMeta({ layout: 'auth' })
+```
 
-## Important Notes
+### Error handling
 
-### Code Quality
+```typescript
+// Fatal -- renders error.vue
+throw createError({ statusCode: 404, statusMessage: 'Not found', fatal: true })
 
-- ALL code and comments MUST be in English
-- Use TypeScript-style JSDoc comments
-- Follow Vue 3 style guide
-- Use `<script setup>` syntax always
-- Validate props with type and validator
+// useApiFetch / useFetch
+const { data, error } = await useApiFetch<T>('/api/...')
+if (error.value) { /* render inline error */ }
 
-### Performance
+// Imperative
+try {
+  await $fetch('/api/...', { method: 'POST', body })
+} catch (e) {
+  const err = e as import('ofetch').FetchError
+  // err.statusCode, err.data
+}
+```
 
-- Lazy load routes and heavy components
-- Use `v-memo` for expensive list rendering
-- Cleanup GSAP animations in `onUnmounted`
-- Use `shallowRef` for large objects not needing deep reactivity
+---
 
-### Accessibility
+## Closing checklist
 
-- Every interactive element needs keyboard support
-- Use semantic HTML elements
-- Include ARIA labels for icons and non-text elements
-- Support reduced motion preference
-- Maintain focus management in modals/dialogs
+Before declaring a frontend task done:
 
-### Theming
+- [ ] TypeScript clean (no errors in `nuxi dev` or `npm run typecheck`)
+- [ ] Unit tests pass (`npm test`)
+- [ ] SSR renders expected content for public routes (`curl :9503/<route> | grep <expected>`)
+- [ ] No hydration warnings in browser console
+- [ ] No browser globals outside `onMounted` / `.client.ts`
+- [ ] `useSeoMeta` present on every public page
+- [ ] All user-visible strings via `t(...)`
+- [ ] GSAP wrapped in `gsap.context()` + `revert()` cleanup on unmount
+- [ ] File size within limits (`.vue` <= 500, `.ts` <= 800)
+- [ ] Auth tokens never readable from JS (cookies only, HttpOnly)
+- [ ] No `any`, no `console.log` left behind
+- [ ] Accessibility: keyboard nav works, focus visible, alt/labels present
 
-- Use CSS custom properties for dynamic theming
-- Always provide fallback values: `var(--color-primary, #06b6d4)`
-- Apply location themes via `data-location` attribute
-- Dark mode is the default - design for dark first
+---
 
-### Mobile-First
+## Integration with other agents / skills
 
-- Start with mobile styles, add breakpoints for larger screens
-- Touch targets minimum 44x44px
-- Test with touch events, not just click
-- Consider thumb zones for mobile navigation
+| Hand off to | When |
+|---|---|
+| `tdc-backend-expert` / `tdc-backend` skill | Flask routes, services, Celery jobs, prod runtime |
+| `tdc-database-expert` / `tdc-database` skill | MySQL schema, migrations, queries |
+| `tdc-api-expert` | REST shape design, Second Life API contract |
+| `tdc-auth-expert` | OAuth providers, JWT issuance server-side, password reset |
+| `tdc-integration-expert` | Google Calendar / Facebook / Patreon / SL webhooks |
+| `tdc-testing-expert` / `tdc-testing` skill | Multi-subsystem strategy, shared fixtures |
 
-### Animation Guidelines
+---
 
-- Register GSAP plugins once (in main.js or App.vue)
-- Always cleanup animations in `onUnmounted`
-- Use ScrollTrigger for scroll-based animations
-- Respect `prefers-reduced-motion` media query
-- Keep animations subtle - max 0.3s for UI, 1s for page transitions
+## Closing principles (from CLAUDE.md)
+
+- **Debug-first**: add logs, see actual state, then fix. Never guess.
+- **Fix-Test-Verify**: one fix -> test -> only proceed if still broken.
+- **No batch modifications**: every file edit is individual and visible.
+- **Zero superficiality**: read relevant code before writing.
+- **Direct communication**: no cheerleading. If a pattern is wrong, say so with the reason.
+
+The motto is **"You Can See The Music"** -- carry that intent through every interaction, transition, and pause.
