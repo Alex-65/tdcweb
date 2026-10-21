@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""The execution boundary of a review eye: it writes only inside disposable state it owns.
+"""The execution boundary of a review eye: its identity, its scratch root, and what it may not use.
 
 The explicitly invoked cross-harness Claude review transport has one operator
 exception: OS sandbox attestation is waived for that invocation, reported as
 NOT_VERIFIED. Its sealed invocation context still binds the canonical role,
 project, policy and session; its hook establishes identity and owned scratch.
-This exception never changes a native actor's classification or OS boundary.
+Since work item `governed-reviewers-main-checkout` (operator decision of 2026-10-21) the
+native path is the same: NO operating-system sandbox wraps the eye's commands.
 
 RUN, by the harness, on every mutating tool call of every subagent:
     `.claude/settings.json` -> hooks.PreToolUse -> `python3 -B "$CLAUDE_PROJECT_DIR/tools/review_eye_boundary.py" hook`
@@ -24,38 +25,53 @@ bring the project agent roster back, so round 2 was reviewed by a general-purpos
 reading the reviewer contract as prose. The contract already said "you never write the
 shared checkout". Prose is authority, not capability, and the capability was unbounded.
 
-THE PROPERTY, from `CANON.md` §Review: an independent review eye treats the shared subject
-checkout as read-only; every mutation a review needs -- a mutation test, a refusal proof, a
-destructive verification, cleanup -- happens only inside disposable state created for and
-owned by that review execution. This module makes the violation UNAVAILABLE rather than
-forbidden: the eye's write capability is confined by the operating system to one root this
-module mints for that one agent, and nothing else on the machine is writable to it.
+WHAT CHANGED, AND WHERE EACH RESPONSIBILITY LIVES NOW. Until 2026-10-21 this module made the
+violation UNAVAILABLE: the eye's Bash ran under a macOS Seatbelt profile (Linux: unprivileged
+bubblewrap with `/` bound read-only) that denied every file write outside the eye's scratch
+root. Measured on 2026-10-21, that sandbox kept the eye from running the real components a
+change calls: the real Codex app-server could not start under it, and no nested sandbox (the
+one a `:workspace` Codex command applies) can be applied inside it. `CANON.md` §Review
+forbids an operating-system sandbox that keeps an eye from running real components, so the
+sandbox is removed. What it carried, and where that lives now:
 
-WHAT THE BOUNDARY IS, AND WHAT IT IS NOT. It is POSITIVE OWNERSHIP, never a blacklist of
-spellings. The hook does not read the command; it does not know what `git worktree remove`,
-`rm -rf`, `git reset --hard` or the next spelling mean. `Bash` is executed under a macOS
-Seatbelt profile that denies `file-write*` everywhere except the eye's own scratch root (and
-`/dev`), so the shared checkout, its git common directory, every other worktree, the home
-directory and the rest of the file system are read-only to it whatever the command says. On
-Linux the same property comes from unprivileged bubblewrap (`/usr/bin/bwrap`): the whole file
-system is bound read-only, a private `/dev` and `/proc` are mounted, and the eye's scratch
-root (real path) is the one read-write bind; every namespace but the network is unshared and
-no capability is kept. A write elsewhere fails with `EROFS`, a hard link out of the root with
-`EXDEV`, and a nested user namespace cannot remount the locked read-only binds.
-`Write`, `Edit`, `MultiEdit` and `NotebookEdit` are harness file operations, not shell: the
-harness writes them itself, unsandboxed, AFTER this hook has answered, so a path this hook
-found inside the root can be swapped for a symlink to the subject between the check and the
-write (the eye's own Bash can do the swap). A check-then-write race is not a boundary, so
-these tools are DENIED for an eye outright; it writes its report and its fixtures through
-Bash, where the operating system decides at the moment of the write. Reads are not
-restricted here: the eye must read the real subject, its history and its diffs, and that is
-the point of its existence.
+  * Protection of the shared checkout against an eye's write -- now the OWNERSHIP RULE in
+    every eye's contract (the shared checkout is read-only to the eye; its mutations happen
+    only in its scratch) plus DETECTION: `review_subject_guard.py` records the checkout's HEAD
+    and tracked, staged, unstaged and untracked state when the eye starts and compares it when
+    it stops (`on_start` / `on_stop`, run by the installed launch hook for every REVIEW_EYE of
+    any project; the verdict is the `subject` field of the SubagentStop row in the session
+    ledger `dispatch.jsonl`). Detection reports a write after the fact; it does NOT prevent
+    one. A difference invalidates the review, and nothing is restored automatically.
+  * Writes elsewhere (the home directory, other repositories, the rest of the file system) --
+    no longer prevented, by operator decision, exactly as for a Codex eye under the standing
+    profile. The eye's contract still forbids them; nothing here enforces it.
+  * Fail-closed when the sandbox primitive is absent or cannot establish its sandbox
+    (`isolation unavailable`, the `bwrap` probe before each allow) -- retired with the
+    primitive: there is no primitive to be missing. The fail-closed envelope below survives.
+  * The sandbox profile's own tests and the `check` cells that measured the primitive --
+    retired with it.
+  * Kept as they were: contract-derived classification and the pinned membership, the scratch
+    root, the exported environment, the owned command script, the denial of the harness file
+    writers and of uncovered tools, the dispatch ledger, and `check`'s binding and class
+    cells.
+
+WHAT THE BOUNDARY IS. It is POSITIVE OWNERSHIP OF IDENTITY AND SCRATCH, never a blacklist of
+spellings. The hook does not read the command. For a bounded eye it mints a scratch root,
+rewrites the Bash call to run an owned script that exports the eye's environment
+(`REVIEW_EYE_SCRATCH`, `REVIEW_EYE_ACTOR`, `TMPDIR`, `TMPPREFIX`, `PYTHONDONTWRITEBYTECODE`)
+under `EYE_SHELL`, and allows it. `Write`, `Edit`, `MultiEdit` and `NotebookEdit` are harness
+file operations, not shell: the harness writes them itself AFTER this hook has answered, so a
+path this hook found inside the root can be swapped for a symlink to the subject between the
+check and the write. A check-then-write race is not a boundary, so these tools are DENIED for
+an eye outright; it writes its report and its fixtures through Bash. Reads are not restricted:
+the eye must read the real subject, its history and its diffs, and that is the point of its
+existence.
 
 WHO IS BOUNDED. Membership is DERIVED FROM THE CONTRACT, not from a list of names. The hook
 receives the harness's own `agent_type`, finds the contract declaring that name and looks for
 the one-line declaration `DOCUMENTATION-REVIEW-ROLE: REVIEW_EYE` that
 `tools/test_review_consumer_boundary.py` already requires of every Fleet actor contract. An
-actor that declares itself an eye is bounded from its first tool call; a future eye inherits
+actor that declares itself an eye is classified from its first tool call; a future eye inherits
 the boundary by declaring the role, with no edit here. The harness names an agent by the
 `name:` its contract declares, so the contract is found by that name and never by guessing
 the file stem; a name two contracts claim is refused. A `WRITER` or `NONE` actor, a built-in
@@ -69,47 +85,31 @@ documentation specialist as the `WRITER`.
 FAIL CLOSED, STRUCTURALLY. A hook process that exits 1 is a non-blocking error and the tool
 call PROCEEDS -- an uncaught exception would fail OPEN. So `hook` never raises: every
 failure it can meet -- unparsable input, an unsafe identifier, a contract whose role line is
-missing or ambiguous, a tool the boundary does not cover, a scratch root it cannot create,
-the platform's primitive (`sandbox-exec`, `bwrap`) absent or not executable, a platform with
-neither, a Linux bwrap that cannot establish its sandbox over the eye's root (proven by one
-probe before each allow) -- becomes a DENY carried in the hook's JSON, and if
-even that cannot be printed the process exits 2, which blocks. An eye whose isolation cannot
-be established therefore cannot execute at all, and reports that it could not; it never
-falls back to unrestricted execution.
+missing or ambiguous, a tool the boundary does not cover, a scratch root it cannot create --
+becomes a DENY carried in the hook's JSON, and if even that cannot be printed the process
+exits 2, which blocks. An eye whose identity or scratch cannot be established therefore
+cannot execute at all, and reports that it could not.
 
 THE SCRATCH ROOT is minted by this module, never by the dispatching brief:
 `<base>/claude-review-eye/<session_id>/<agent_id>`, created by the hook on the eye's
 first call. Ownership is thereby proven from the instrument's own data (the harness's ids),
-not from a name an orchestrator typed. The wrapped command sees it as `$REVIEW_EYE_SCRATCH`,
-its `TMPDIR` is redirected beneath it so `tempfile`, `mktemp` and git temp files land
-inside the boundary, and `$REVIEW_EYE_ACTOR` carries the classified `agent_type`. The
-Seatbelt profile and the bwrap arguments are regenerated on every call and passed inline, so
-there is no sandbox description inside the writable root for the eye to edit. `<base>` is
-`scratch_base()`: the FleetLocal volume on macOS, the account's own owner-only
-`~/.local/state/fleet/scratch/work` elsewhere, or `FLEET_SCRATCH_ROOT` when it is set. An eye that needs a mutable copy
-of the subject CLONES it into its scratch (`git clone --shared`), which writes nothing into
-the subject's repository; `git worktree add` from the subject would, and is refused like any
-other write there.
+not from a name an orchestrator typed. The command sees it as `$REVIEW_EYE_SCRATCH`, its
+`TMPDIR` is redirected beneath it so `tempfile`, `mktemp` and git temp files land inside it,
+and `$REVIEW_EYE_ACTOR` carries the classified `agent_type`. `<base>` is `scratch_base()`: the
+FleetLocal volume on macOS, the account's own owner-only `~/.local/state/fleet/scratch/work`
+elsewhere, or `FLEET_SCRATCH_ROOT` when it is set. The eye reads the main checkout in place
+or an export of the committed candidate in its scratch, and a clone there only where a proof
+needs history (`tools/review_subject_guard.py locate`).
 
 WHAT `check` PROVES. That the project binds this hook exactly (matcher and command) in
 `.claude/settings.json`, PreToolUse and SubagentStart both; that every contract declaring
 `REVIEW_EYE` grants only tools an eye may hold -- `Read`, `Grep`, `Glob`, which do not write,
-plus `Bash`, which it confines -- and that a new eye granting anything else
-(`Agent`, an MCP tool, `*`, `Write`, or no `tools` line at all) is REFUSED, because a
-capability the boundary does not cover is exactly the unbounded authority this module exists
-to remove; that every pinned eye still declares the role and every contract's `name` is its
-file stem; and that the sandbox primitive on this host actually refuses a write outside a
-root and permits one inside it, both cells, at check time. What it does not judge: prose. A
-contract sentence is read by the eye, not by this tool.
-
-`check` AND THE CONTROL ARE THE PARENT'S TO RUN, NEVER AN EYE'S. macOS refuses a nested
-`sandbox_apply`, so from inside the boundary the primitive cannot be applied at all: `check`
-then reports a distinct, named outcome (`not measurable from inside a sandbox`) rather than
-a false `REFUSED`, and the control run fails loudly instead of counting a command that never
-reached the boundary as a refusal. On Linux a nested `bwrap` is refused where the host forbids
-nested user namespaces, and `check` reports that as a failed cell carrying bwrap's own words.
-The orchestrator runs both before dispatching an eye and
-cites them; an eye consumes that evidence, as `CANON.md` §Review says of every proof.
+plus `Bash` -- and that a new eye granting anything else (`Agent`, an MCP tool, `*`, `Write`,
+or no `tools` line at all) is REFUSED, because a capability the boundary does not cover is
+exactly the unbounded authority this module exists to remove; and that every pinned eye still
+declares the role and every contract's `name` is its file stem. What it does not judge:
+prose. A contract sentence is read by the eye, not by this tool. `check` only reads files, so
+it runs anywhere; it is still the dispatching actor's to run before an eye is dispatched.
 
 MANAGED PROJECTS RUN THIS SAME FILE. A Fleet-managed project whose Claude roster declares
 a `REVIEW_EYE` receives it through `tools/review_eye_boundary_render.py`, which writes it to
@@ -123,14 +123,13 @@ LIMITS, stated so nobody infers them away. The hook is a LOCAL project setting a
 in a session that loaded `.claude/settings.json`; a harness build that does not run
 settings hooks for subagents, or a caller that disables hooks, has no boundary, which is
 why every eye's contract makes it print `$REVIEW_EYE_SCRATCH` first and stop when it is
-unset. Reads are unrestricted, so this is not a secrets boundary. The parent session is
-deliberately unbounded. The eye's Bash is auto-approved once rewritten,
-so no permission prompt stands in front of it: reads of the whole file system and outbound
-network are open to it, and the project's prohibition on reading secret values stays a
-contract rule, not a capability. A malformed hook payload denies for EVERY actor, the parent
-included, because classification happens after parsing. The Codex eye runs under its own
-dispatcher's disposable worktrees and Codex's sandbox (`tools/codex-review`), not under this
-hook.
+unset. Reads are unrestricted, so this is not a secrets boundary, and since the sandbox was
+removed its writes are no longer restricted either (the network never was): the eye's Bash is
+auto-approved once rewritten, so no permission prompt stands in front of it, and the project's
+prohibition on reading secret values and on writing outside the scratch stays a contract
+rule, not a capability. The parent session is deliberately unbounded. A malformed hook payload denies for
+EVERY actor, the parent included, because classification happens after parsing. The Codex
+eye runs under the standing profile and `tools/codex-review`, not under this hook.
 """
 
 from __future__ import annotations
@@ -143,7 +142,6 @@ import re
 import shlex
 import shutil
 import stat
-import subprocess
 import sys
 import tempfile
 from typing import NamedTuple
@@ -160,15 +158,15 @@ BOUNDED_ROLE = "REVIEW_EYE"
 
 #: Tools that never write. An eye may hold them unconfined.
 READ_ONLY_TOOLS = frozenset({"Read", "Grep", "Glob"})
-#: The one mutating tool the boundary confines: the shell, under the OS sandbox,
-#: which decides at the moment of each write.
+#: The one mutating tool the boundary allows an eye: the shell, run as an owned script
+#: under `EYE_SHELL` with the eye's environment exported. Nothing confines its writes.
 BASH_TOOL = "Bash"
 #: The harness's own file writers. Matched so that an eye's call to one is
 #: DENIED: the harness writes after the hook answers, so a path check here is a
 #: race, not a boundary (see the module docstring).
 PATH_TOOLS = frozenset({"Write", "Edit", "MultiEdit", "NotebookEdit"})
 COVERED_TOOLS = frozenset({BASH_TOOL, *PATH_TOOLS})
-#: The grants an eye may hold: read-only tools and the confined shell.
+#: The grants an eye may hold: read-only tools and the shell.
 EYE_TOOLS = READ_ONLY_TOOLS | {BASH_TOOL}
 #: The contracts pinned as review eyes. A contract named here that no longer
 #: declares REVIEW_EYE is refused by `check`: leaving the class is a recorded
@@ -200,21 +198,10 @@ HOOK_COMMAND = f'python3 -B "$CLAUDE_PROJECT_DIR/{HERE.relative_to(REPO).as_posi
 SETTINGS_PATH = ".claude/settings.json"
 AGENTS_DIR = ".claude/agents"
 
-SANDBOX_EXEC = "/usr/bin/sandbox-exec"
-#: The Linux primitive: unprivileged bubblewrap at its fixed distribution path, never one found
-#: on PATH. Measured on 2026-10-13 on all six managed Linux accounts (0.9.0, and 0.6.1 on dwh;
-#: not setuid; caps dropped, subject writes EROFS).
-BWRAP = "/usr/bin/bwrap"
 LINUX = sys.platform.startswith("linux")
-#: This platform's primitive. Every platform but Linux names `sandbox-exec`, which exists only
-#: on macOS: elsewhere it is absent, and absence is a refusal.
-SANDBOX_PRIMITIVE = BWRAP if LINUX else SANDBOX_EXEC
-#: The shell that runs the eye's command under the primitive. The managed Linux accounts carry
-#: no zsh (measured on all six), and Claude Code runs its Bash tool there in bash.
+#: The shell that runs the eye's owned command script. The managed Linux accounts carry no zsh
+#: (measured on all six), and Claude Code runs its Bash tool there in bash.
 EYE_SHELL = "/bin/bash" if LINUX else "/bin/zsh"
-#: Test seam only: lets the "isolation unavailable" cell point at a path that
-#: does not exist. Never set in production. It overrides `SANDBOX_PRIMITIVE`.
-SANDBOX_EXEC_ENV = "REVIEW_EYE_SANDBOX_EXEC"
 SCRATCH_ENV = "REVIEW_EYE_SCRATCH"
 ACTOR_ENV = "REVIEW_EYE_ACTOR"
 SCRATCH_PARENT = "claude-review-eye"
@@ -230,10 +217,6 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 #: quoted or flow value continued onto a column-0 `name:` line leaves that name carrying its
 #: quote or bracket, which is no safe name, so such a file is refused, not misread.
 PLAIN_LINE = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*):(?:[ \t]+(.*?))?[ \t]*")
-#: What macOS prints when a sandboxed process tries to apply another profile.
-NESTED_SANDBOX_MARK = "sandbox_apply"
-#: What the operating system says when the boundary refuses a write.
-DENIAL_MARK = "read-only file system" if LINUX else "operation not permitted"
 
 
 class Refusal(Exception):
@@ -383,7 +366,7 @@ def is_bounded(project_dir: pathlib.Path, agent_type: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# the scratch root and the sandbox profile
+# the scratch root
 # ---------------------------------------------------------------------------
 
 def scratch_base() -> pathlib.Path:
@@ -446,64 +429,6 @@ def ensure_scratch(root: pathlib.Path) -> bool:
     return created
 
 
-def seatbelt_profile(root: pathlib.Path) -> str:
-    """Deny every file write except under `root` (real path) and `/dev`."""
-    real = os.path.realpath(root)
-    if any(c in real for c in '"\\\n'):
-        raise Refusal("the scratch root path is not representable in a sandbox profile")
-    return ("(version 1)\n"
-            "(allow default)\n"
-            "(deny file-write*)\n"
-            f'(allow file-write* (subpath "{real}"))\n'
-            '(allow file-write* (subpath "/dev"))\n')
-
-
-def bwrap_arguments(root: pathlib.Path) -> list[str]:
-    """Bind everything read-only, then a private `/dev` and `/proc`, then `root` (real path)
-    read-write. The order is the mechanism: a later bind covers an earlier one, so `/` first."""
-    real = os.path.realpath(root)
-    return ["--unshare-all", "--share-net", "--die-with-parent", "--new-session",
-            "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--bind", real, real]
-
-
-def sandbox_primitive() -> str:
-    path = os.environ.get(SANDBOX_EXEC_ENV, SANDBOX_PRIMITIVE)
-    if not (os.path.isfile(path) and os.access(path, os.X_OK)):
-        raise Refusal(f"isolation unavailable: {path} is absent or not executable; "
-                      f"the eye cannot execute unbounded instead")
-    return path
-
-
-def sandbox_argv(root: pathlib.Path) -> list[str]:
-    """The primitive and its arguments: every file write denied except under `root`."""
-    primitive = sandbox_primitive()
-    if LINUX:
-        return [primitive, *bwrap_arguments(root)]
-    return [primitive, "-p", seatbelt_profile(root)]
-
-
-def establish_sandbox(root: pathlib.Path) -> None:
-    """On Linux, prove the sandbox can be set up over `root` before the eye's Bash is allowed.
-
-    An executable bwrap can still be unable to create its namespaces (a host forbidding
-    unprivileged user namespaces, an AppArmor profile it depends on unloaded). Allowed anyway,
-    every command -- the eye's mandatory first one included -- would fail, and the eye would end
-    REVIEW NOT OBTAINED; refused here, it keeps the read-only mode its contract names for a host
-    with no usable sandbox. Never a fallback to unconfined execution either way."""
-    if not LINUX:
-        return
-    try:
-        probe = subprocess.run([*sandbox_argv(root), "/bin/true"], capture_output=True,
-                               text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired) as error:
-        raise Refusal(f"isolation unavailable: the sandbox could not be established: {error}; "
-                      f"the eye cannot execute unbounded instead") from error
-    if probe.returncode != 0:
-        raise Refusal(f"isolation unavailable: {sandbox_primitive()} cannot establish its sandbox "
-                      f"here (rc={probe.returncode}: {probe.stderr.strip()[-200:]}); the eye "
-                      f"cannot execute unbounded instead")
-
-
 def command_script(command: str, root: pathlib.Path, actor: str) -> tuple[pathlib.Path, bytes]:
     """Pure expected path/bytes; reconstructing evidence never creates it."""
     if not isinstance(command, str):
@@ -533,17 +458,15 @@ def verify_command_script(command: str, root: pathlib.Path, actor: str) -> None:
 
 
 def wrapped_command(command: str, root: pathlib.Path, actor: str, *, context: dict | None = None) -> str:
-    """Pure shell line: the same OS boundary executes an owned script, not inline code.
+    """Pure shell line: the shell executes an owned script, not inline code, and no sandbox.
 
     Claude's headless permission parser can ask again for complex inline `zsh -c`
     programs after the hook allows them. A script operand avoids that inline safety
-    check; the unchanged sandbox (Seatbelt, or bwrap on Linux) remains mandatory for every
-    execution.
+    check. The cross-harness transport names its shell in its sealed context; a native eye
+    runs under `EYE_SHELL`.
     """
     script, _ = command_script(command, root, actor)
-    if context is not None:
-        return shlex.join([context["shell"], str(script)])
-    return shlex.join([*sandbox_argv(root), EYE_SHELL, str(script)])
+    return shlex.join([context["shell"] if context is not None else EYE_SHELL, str(script)])
 
 
 def prepare_command(command: str, root: pathlib.Path, actor: str, *, context: dict | None = None) -> str:
@@ -668,15 +591,13 @@ def decide(data: dict) -> dict | None:
         return None
     if tool == BASH_TOOL:
         created = ensure_scratch(root)
-        if context is None:
-            establish_sandbox(root)
         updated = dict(tool_input)
         updated["command"] = prepare_command(tool_input.get("command"), root, agent_type,
                                              **({"context": context} if context else {}))
         output = {"hookEventName": "PreToolUse",
                   # `updatedInput` takes effect only with an explicit decision
-                  # (measured on 2.1.263); the OS boundary, not the prompt, is
-                  # the control on the rewritten command.
+                  # (measured on 2.1.263); no prompt stands in front of the
+                  # rewritten command, and no sandbox confines it.
                   "permissionDecision": "allow",
                   "updatedInput": updated}
         if context is not None:
@@ -687,7 +608,9 @@ def decide(data: dict) -> dict | None:
         elif created:
             output["additionalContext"] = (
                 f"REVIEW EYE BOUNDARY established for {agent_type}: {SCRATCH_ENV}={root} is "
-                f"the only writable location; the subject checkout is read-only to you.")
+                "where your work goes (exports, clones, fixtures, reports, TMPDIR). The shared "
+                "checkout is read-only to you by your contract; a change to it is detected by "
+                "the before/after comparison and invalidates the review.")
         return {"hookSpecificOutput": output}
     if tool in PATH_TOOLS:
         raise Refusal(f"{tool} is a harness file write the boundary cannot decide at write "
@@ -716,7 +639,7 @@ def run_hook(stdin_text: str | None = None) -> tuple[dict | None, int]:
 
 
 # ---------------------------------------------------------------------------
-# check: the binding, the class, the primitive
+# check: the binding and the class
 # ---------------------------------------------------------------------------
 
 def _frontmatter_tools(path: pathlib.Path) -> str | None:
@@ -850,36 +773,8 @@ def class_violations(root: pathlib.Path) -> list[str]:
     return violations
 
 
-def primitive_violations() -> list[str]:
-    """The sandbox primitive on this host, measured both ways at check time."""
-    with tempfile.TemporaryDirectory() as tmp:
-        base = pathlib.Path(tmp)
-        inside, outside = base / "inside", base / "outside"
-        inside.mkdir()
-        outside.mkdir()
-        try:
-            argv = sandbox_argv(inside)
-        except Refusal as refusal:
-            return [str(refusal)]
-        problems: list[str] = []
-        for target, expect_ok, label in ((inside / "x", True, "inside its root"),
-                                         (outside / "x", False, "outside its root")):
-            result = subprocess.run([*argv, "/usr/bin/touch", str(target)],
-                                    capture_output=True, text=True)
-            if NESTED_SANDBOX_MARK in result.stderr:
-                return ["sandbox primitive: not measurable from inside a sandbox (nested "
-                        "sandbox_apply refused); run check from the unbounded parent session, "
-                        "never from an eye"]
-            if (result.returncode == 0) != expect_ok or target.exists() != expect_ok:
-                problems.append(f"sandbox primitive: a write {label} was "
-                                f"{'refused' if expect_ok else 'permitted'} "
-                                f"(rc={result.returncode}, exists={target.exists()}, "
-                                f"stderr={result.stderr.strip()[-200:]!r})")
-    return problems
-
-
 def check(root: pathlib.Path) -> list[str]:
-    return binding_violations(root) + class_violations(root) + primitive_violations()
+    return binding_violations(root) + class_violations(root)
 
 
 # ---------------------------------------------------------------------------
@@ -917,7 +812,6 @@ def main(argv: list[str] | None = None) -> int:
         eyes = [c.name for c in roster(root) if declared_role(c.text)[0] == BOUNDED_ROLE]
         print(f"  ok    {SETTINGS_PATH} binds the hook on {MATCHER}")
         print(f"  ok    bounded eyes ({len(eyes)}): {', '.join(eyes) or '-'}; every grant covered")
-        print(f"  ok    sandbox primitive refuses outside a root and permits inside it")
         print("REVIEW EYE BOUNDARY: BOUND")
         return 0
     print("usage: review_eye_boundary.py hook | scratch-root | check [--root PATH]")

@@ -83,30 +83,37 @@ visual conformance from reading code.
 ## Execution boundary (the reviewed subject is read-only)
 
 You are an independent review eye (`CANON.md §Review`): the checkout you review is
-read-only to you. On native Claude dispatch this is enforced, not requested: the project hook
+read-only to you. On native Claude dispatch the project hook
 `.claude/hooks/review_eye_boundary.py`, bound in `.claude/settings.json`, classifies you by the
 `DOCUMENTATION-REVIEW-ROLE` line above, mints a private scratch root exported as
-`$REVIEW_EYE_SCRATCH`, runs your Bash under an operating-system write-allowlist of that root,
-and refuses `Write` and `Edit`. On the Claude harness your first command, and the first line of
-your report:
+`$REVIEW_EYE_SCRATCH`, with `TMPDIR` beneath it, and refuses `Write` and `Edit`. No
+operating-system sandbox confines your Bash, so that you can run the real components a change
+calls. The shared checkout is protected by this rule and by one comparison: its HEAD and its
+tracked, staged, unstaged and untracked state are recorded before you start and compared after
+you stop, and any difference invalidates your review. On the Claude harness your first command,
+and the first line of your report:
 
     echo "REVIEW-EYE-IDENTITY: ${REVIEW_EYE_ACTOR:?boundary absent} SCRATCH: ${REVIEW_EYE_SCRATCH:?boundary absent}"
 
 - On the Claude harness, if those variables are unset, no boundary was established: report
   `REVIEW NOT OBTAINED: execution boundary absent` and stop.
-- On the Claude harness, if the boundary refuses Bash itself because this host offers no
-  operating-system sandbox, continue read-only with Read, Grep and Glob, and report every
-  reproduction you could not run as NOT RUN with that reason.
 - On the Codex harness those variables are never exported and their absence is not a missing
-  boundary: the review dispatcher's disposable reviewer root is your scratch, and your first
-  line is `REVIEW-EYE-IDENTITY: <your agent name> SCRATCH: <that reviewer root>`.
-- Reproductions, probes and fixtures live only under your scratch root. A mutable copy of the
-  subject is a clone there (`git clone --shared --no-checkout`, then check out only the paths
-  you need), never a worktree of the shared repository; never materialize secret-bearing
-  files. Never edit, commit, stash, reset, clean, check out or remove anything in the shared
-  checkout, not even to prove a guard.
+  boundary: the review dispatcher's reviewer root is your scratch, the dispatcher tells you where
+  to read each component, and your first line is
+  `REVIEW-EYE-IDENTITY: <your agent name> SCRATCH: <that reviewer root>`.
+- Read the subject in the main checkout. For a committed candidate, ask where to read it:
+  `python3 -B ~/.local/fleet/claude-projection/review_subject_guard.py locate --candidate <head>
+  --checkout <the checkout> --scratch <your scratch>`. `MAIN <checkout>`: HEAD is the candidate,
+  so read and run there, writing nothing into it. `EXPORT <directory>`: a `git archive` export of
+  the candidate in your scratch, to read, mutate and run; add `--path <path>` (repeatable) to
+  export only what you need, and always do so where the tree holds a tracked credential or
+  configuration file you must not materialize. Only where a proof needs history, add `--history`
+  for `CLONE <directory>` and say in your report why. Never a worktree of the shared repository.
+  Exports and clones are removed when you stop.
+- Reproductions, probes and fixtures live only under your scratch root; never materialize
+  secret-bearing files. Never edit, commit, stash, reset, clean, check out or remove anything in
+  the shared checkout, not even to prove a guard.
 - The same ownership rule applies on both harnesses.
-
 ## Report
 
 Return the report to your caller; you write no file. When the brief carries a frozen finding ledger,
