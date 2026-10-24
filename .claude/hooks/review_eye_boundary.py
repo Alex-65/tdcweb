@@ -96,8 +96,8 @@ first call. Ownership is thereby proven from the instrument's own data (the harn
 not from a name an orchestrator typed. The command sees it as `$REVIEW_EYE_SCRATCH`, its
 `TMPDIR` is redirected beneath it so `tempfile`, `mktemp` and git temp files land inside it,
 and `$REVIEW_EYE_ACTOR` carries the classified `agent_type`. `<base>` is `scratch_base()`: the
-FleetLocal volume on macOS, the account's own owner-only `~/.local/state/fleet/scratch/work`
-elsewhere, or `FLEET_SCRATCH_ROOT` when it is set. The eye reads the main checkout in place
+account's own owner-only `~/.local/state/fleet/scratch/work` on every platform, or
+`FLEET_SCRATCH_ROOT` when it is set. The eye reads the main checkout in place
 or an export of the committed candidate in its scratch, and a clone there only where a proof
 needs history (`tools/review_subject_guard.py locate`).
 
@@ -372,25 +372,21 @@ def is_bounded(project_dir: pathlib.Path, agent_type: str) -> bool:
 def scratch_base() -> pathlib.Path:
     """Fleet-owned heavy scratch, independent of global TMPDIR and shell startup.
 
-    `FLEET_SCRATCH_ROOT` when set. Otherwise macOS uses the FleetLocal volume, refusing when it
-    is not mounted, and Linux uses the account's own `~/.local/state/fleet/scratch/work`, made
-    owner-only -- the default `codex-review` already applies on the same accounts. A per-account
+    `FLEET_SCRATCH_ROOT` when set. Otherwise, on every platform, the account's own
+    `~/.local/state/fleet/scratch/work`, made owner-only -- the default `codex-review` already
+    applies on the same accounts (finding F7: macOS no longer needs an external volume). A per-account
     base keeps one account's eyes out of a `/tmp` another account on the same host shares."""
     if "FLEET_SCRATCH_ROOT" in os.environ:
         root = pathlib.Path(os.environ["FLEET_SCRATCH_ROOT"])
         if not root.is_absolute():
             raise ValueError("FLEET_SCRATCH_ROOT must be absolute")
         return root.resolve()
-    if LINUX:
-        state = pathlib.Path.home() / ".local" / "state" / "fleet" / "scratch"
-        root = state / "work"
-        root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        for directory in (state, root):
-            directory.chmod(0o700)
-        return root.resolve()
-    if not pathlib.Path("/Volumes/ST7T2T").is_mount():
-        raise OSError("Fleet scratch volume is not mounted; set FLEET_SCRATCH_ROOT explicitly")
-    return pathlib.Path("/Volumes/ST7T2T/FleetLocal/scratch/work").resolve()
+    state = pathlib.Path.home() / ".local" / "state" / "fleet" / "scratch"
+    root = state / "work"
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for directory in (state, root):
+        directory.chmod(0o700)
+    return root.resolve()
 
 
 def private_scratch(prefix: str) -> pathlib.Path:

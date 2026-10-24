@@ -975,6 +975,59 @@ def _currency_bytes(name: str, data: bytes) -> bytes:
                                         text).encode("utf-8")
 
 
+#: The predecessor layer (operator decision 2026-10-24: hook transitions N and N-1): the file
+#: `review_eye_layer_predecessor.json` beside this module declares the `_digest` of each layer
+#: member as installed at the release baseline. A checkout whose members ALL equal it is accepted
+#: like one whose members all equal the reference beside this module; mixed copies and any other
+#: bytes stay refused. Same literals and parse as `fleetlib.boundary_currency` (stdlib only
+#: here); a test pins the two equal.
+PREDECESSOR_FILE = "review_eye_layer_predecessor.json"
+PREDECESSOR_SCHEMA = "fleet-review-eye-layer-predecessor/1"
+
+
+def _predecessor_digests() -> dict[str, str] | None:
+    """The predecessor's member digests, or None when the file is missing, unreadable or
+    malformed -- proof of nothing, so only the current layer is accepted."""
+    try:
+        value = json.loads((pathlib.Path(__file__).resolve().parent
+                           / PREDECESSOR_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    members, baseline = value.get("members"), value.get("baseline")
+    if (value.get("schema") != PREDECESSOR_SCHEMA or not isinstance(baseline, str)
+            or re.fullmatch(r"[0-9a-f]{40}", baseline) is None or not isinstance(members, dict)
+            or set(members) != set(REVIEW_EYE_LAYER)
+            or not all(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest)
+                       for digest in members.values())):
+        return None
+    return dict(members)
+
+
+def _member_digest(hooks_dir: pathlib.Path, name: str) -> str | None:
+    """`fleetlib.boundary_currency.copy_digest` of a regular, readable member; None otherwise."""
+    path = hooks_dir / name
+    try:
+        if not stat.S_ISREG(path.lstat().st_mode):
+            return None
+        return hashlib.sha256(_currency_bytes(name, path.read_bytes())).hexdigest()
+    except OSError:
+        return None
+
+
+def _layer_problems(hooks_dir: pathlib.Path) -> list[str]:
+    """The problems of the carried layer: none when every member is current, or when every member
+    is the predecessor's. Mixed copies and any other state keep their current-layer problems."""
+    problems = [p for name in REVIEW_EYE_LAYER if (p := _member_problem(hooks_dir, name)) is not None]
+    if problems:
+        predecessor = _predecessor_digests()
+        if predecessor and all(_member_digest(hooks_dir, name) == predecessor[name]
+                               for name in REVIEW_EYE_LAYER):
+            return []
+    return problems
+
+
 def _member_problem(hooks_dir: pathlib.Path, name: str) -> str | None:
     """None when `hooks_dir / name` is CURRENT: a regular file whose bytes equal the reference
     module of the same name beside this one. Anything else -- missing, a symlink or other
@@ -1072,7 +1125,8 @@ def boundary_problems(root: pathlib.Path | str) -> list[str]:
     returns `[]`: it has no boundary to disagree with, and is admitted unchanged. The source
     layout owes its bindings and hook-enabled state (`SOURCE_BOUNDARY_DIR`), not byte currency.
     Carrying the materialized layer means every one of its members must be CURRENT (a regular
-    file, byte-equal to the reference copy beside this module) and every one of its bindings
+    file, byte-equal to the reference copy beside this module) -- or every one the predecessor's
+    (`_layer_problems`; N and N-1, never a mix) -- and every one of its bindings
     must be present and enabled. Called by `claude_runtime_projection.generate` at issuance
     and by `_launch_policy` at every governed named launch, so a `.claude/hooks` reset mid-session
     or a manual `--plugin-dir` bypass is caught at the moment of use, not only at issuance."""
@@ -1096,8 +1150,7 @@ def boundary_problems(root: pathlib.Path | str) -> list[str]:
                 problems.append(f"{checkout}/.claude/settings.json does not bind {where} "
                                 f"to {command}")
         if review_eye_carried:
-            problems += [p for name in REVIEW_EYE_LAYER
-                        if (p := _member_problem(hooks_dir, name)) is not None]
+            problems += _layer_problems(hooks_dir)
             if not _hook_bound(hooks.get("PreToolUse"), _REVIEW_EYE_MATCHER, _REVIEW_EYE_COMMAND):
                 problems.append(f"{checkout}/.claude/settings.json does not bind PreToolUse "
                                 f"{_REVIEW_EYE_MATCHER} to {_REVIEW_EYE_COMMAND}")
