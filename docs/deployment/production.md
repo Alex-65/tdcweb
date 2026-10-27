@@ -40,7 +40,7 @@ Nuxt node, via flaskFetch) can reach Flask. No direct internet access.
   ```bash
   sudo a2enmod proxy proxy_http headers rewrite ssl
   ```
-- [ ] Node.js >= 20 (Nuxt 4 requirement). Verify: `node --version`.
+- [ ] Node.js `^22.22.3 || ^24.15.0` (Nuxt >= 4.6 `engines.node`). Verify: `node --version`.
 - [ ] Python >= 3.11. Verify: `python3 --version`.
 - [ ] MySQL 8.x with `tdcweb` database + `tdcweb` user, full schema applied.
 - [ ] Redis 6+ on :6379.

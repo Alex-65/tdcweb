@@ -19,7 +19,12 @@ curl).
   0. Floors raised in `backend/requirements.txt`: Flask>=3.1.3,
   Werkzeug>=3.1.9, PyJWT>=2.15.0, Authlib>=1.6.12, requests>=2.33.0,
   python-dotenv>=1.2.2, Pillow>=13.0.0, pytest>=9.0.3, black>=26.10.1.
-  protobuf stays below 7 because `google-api-core` requires `protobuf<7`.
+  The existing venv keeps protobuf 6.x because its `google-api-core` 2.29.0
+  requires `protobuf<7`; a fresh resolution gets newer `google-api-core` and
+  protobuf 7.x, also audit-clean.
+- Frontend runtime: Nuxt >= 4.6 requires Node `^22.22.3 || ^24.15.0`; the dev
+  host's nvm default moved from Node 22.19.0 to 22.23.4 (operator decision).
+  The lockfile is accepted by `npm ci` on npm 10 and npm 11.
 - Frontend: `npm audit` went from 81 findings (6 critical, 30 high, 41
   moderate, 4 low) to 9 high with one root cause, `node-forge <=1.4.0`
   (GHSA-86w9-cpqp-85rv) via `nuxt` -> `nitropack` -> `listhen`. No patched
@@ -31,7 +36,8 @@ curl).
 - `frontend/package.json`: `nuxt` ^4.6.3 (was ^4.4.2), `vitest` ^4.1.12,
   `happy-dom` ^21.0.4 (major), `zod` ^4.6.7 (was ^3.25.76, major; fixes
   GHSA-mrhx-c7xc-m3w5). Transitive: tiptap 3.32.0, `@nuxtjs/seo` 5.3.16,
-  `nuxt-og-image` 6.10.4, `@nuxt/test-utils` 4.3.4
+  `nuxt-og-image` 6.10.4, `@nuxt/test-utils` 4.3.4, `vite` 8.3.5 (major,
+  via nuxt; was 7.3.2)
   (`frontend/.nuxtrc` setup version follows).
 - `frontend/app/composables/useApiFetch.ts`: `useFetch` generic slots
   updated for Nuxt >= 4.6 (`BaseURL` and `_ReqT` were inserted).

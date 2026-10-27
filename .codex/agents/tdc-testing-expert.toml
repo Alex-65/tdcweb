@@ -22,7 +22,9 @@ specialist (`tdc-e2e-tester`, `tdc-visual-tester`, `tdc-browser-performance-test
   `cd frontend && npx vitest run tests/unit/<spec>.test.ts`; `npm test` runs them all. Server handlers
   and composables are tested through typed `globalThis` stubs (`setCookie`, `getCookie`, `$fetch`,
   `useRuntimeConfig`) that `server/utils/*.ts` resolve at call time — a test that stubs a name the
-  module does not look up is testing the stub.
+  module does not look up is testing the stub. App composables are the exception for `$fetch`:
+  under Nuxt >= 4.6 they import it from `#build/fetch`, so their tests mock that module
+  (`vi.mock('#build/fetch', ...)`, as `tests/unit/useApi.test.ts` does).
 - **Not present**: no Playwright config or E2E specs (the `@playwright/test` package is installed, and
   browser checks are done through the Playwright MCP at 1920x1080 per the kernel), no lint or
   type-check script (`npm run lint`/`typecheck` do not exist; `vue-tsc` is not installed), no coverage

@@ -329,8 +329,8 @@ auth.clear()                                          // actions: not refs
 Same zod schema can be reused server-side via `readValidatedBody`.
 
 > The project is on zod 4 and `@vee-validate/zod` was removed, so
-> `toTypedSchema` below is unavailable; replace it with the bridge chosen
-> for the first form (playbook §17.1, TD-003 closure).
+> `toTypedSchema` is unavailable; `bridgeSchema` below is a placeholder for
+> the bridge chosen with the first form (playbook §17.1, TD-003 closure).
 
 ```vue
 <script setup lang="ts">
@@ -338,7 +338,7 @@ import { z } from 'zod'
 import { useForm } from 'vee-validate'
 
 const schema = bridgeSchema(z.object({ // placeholder, see note above
-  email: z.string().email('Invalid email'),
+  email: z.email('Invalid email'),
   password: z.string().min(8, 'Min 8 characters'),
 }))
 
