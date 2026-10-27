@@ -405,6 +405,8 @@ describe('flaskFetch', () => {
 
 `mockNuxtImport` from `@nuxt/test-utils` works, but is brittle for composables that wrap many auto-imports. **Preferred approach**: extract pure decision logic into a helper function and unit-test the helper directly.
 
+**`$fetch` in app code (Nuxt >= 4.6)**: app composables get `$fetch` from the `#build/fetch` module, not from `globalThis`, so assigning `globalThis.$fetch` in a test has no effect on them. Mock the module instead, as `frontend/tests/unit/useApi.test.ts` does: `vi.mock('#build/fetch', () => ({ $fetch: Object.assign(fn, { create: createMock }) }))` (declare the mock functions with `vi.hoisted`). The globalThis pattern above still applies to `server/` code, which resolves `$fetch` through its own resolver.
+
 **Reference**: `frontend/app/utils/auth-decisions.ts` (pure) tested by `frontend/tests/unit/auth-decisions.test.ts`. The thin Nuxt-aware wrapper (`app/middleware/auth.ts`) is covered by E2E.
 
 ```typescript

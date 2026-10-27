@@ -29,28 +29,6 @@ buffer for deferred work.
 
 ## Open items
 
-### 🟢 TD-003 · `zod` pinned to v3 due to `@vee-validate/zod` peer
-
-- **Source:** Task 1.4 (commit 2091253, 2026-04-23)
-- **Issue:** Installed `zod@^3.25.76` because `@vee-validate/zod@4.15.1`
-  requires `zod@^3.24.0`. Zod v4 is available and satisfies our own
-  usage, but the peer range on the adapter blocks us.
-- **Why it's open:** pinning v3 is the correct current choice. Upgrade
-  path depends on `@vee-validate/zod` publishing a release that accepts
-  `zod@^4`.
-- **Impact:** low. Zod v3 is stable and feature-complete for TDC needs.
-- **Resolution trigger:** `@vee-validate/zod` publishes a version whose
-  peer range includes `zod@^4`. Check quarterly or when a new
-  `vee-validate` major lands.
-- **Close when:** `zod@^4` is in `frontend/package.json` and all form
-  schemas still pass tests.
-- **Audit log:**
-  - 2026-04-26 (post-Phase-7 sweep): `npm view @vee-validate/zod
-    peerDependencies` -> still `{ zod: '^3.24.0' }`. Latest published is
-    still `4.15.1`. No upstream movement since the original entry.
-    Stays open; next audit at next quarterly check or on
-    `@vee-validate/zod` major version bump.
-
 ### 🟢 TD-008 · 2 location palettes missing from `main.css`
 
 - **Source:** Task 2.3 (uncommitted in working tree, 2026-04-23)
@@ -240,7 +218,62 @@ buffer for deferred work.
 
 ---
 
+### 🟡 TD-018 · `node-forge` advisory GHSA-86w9-cpqp-85rv has no patched release (9 npm audit highs)
+
+- **Source:** work item `dependency-vulnerability-remediation` (2026-10-27)
+- **Issue:** after the dependency remediation, `npm audit` in `frontend/`
+  reports 9 high findings with one root cause: `node-forge <=1.4.0`
+  (GHSA-86w9-cpqp-85rv, RSA PKCS#1 v1.5 signature verification), reached
+  through `nuxt` -> `nitropack` -> `listhen` -> `node-forge`. The nine
+  entries are `node-forge`, `listhen`, `nitropack`, `nuxt`,
+  `@nuxt/nitro-server`, `@nuxt/vite-builder`, `@nuxt/vite-server`,
+  `nuxt-og-image` and `@nuxtjs/seo`. Before the work item the audit
+  reported 81 findings (6 critical, 30 high, 41 moderate, 4 low).
+- **Why it's open:** no patched `node-forge` exists (1.4.0 is the latest
+  release, measured 2026-10-27), so there is nothing to upgrade to.
+- **Impact:** low in practice. `listhen` uses `node-forge` only to
+  generate self-signed certificates for `nuxt dev --https`
+  (`createCertificate`, `generateKeyPair`, PEM conversion), never RSA
+  signature verification, and `dev.sh` does not start `--https`.
+  `node-forge` and `listhen` are absent from the production bundle
+  (`.output/server/node_modules`). Counts as a standing red line in
+  `npm audit` output until upstream moves.
+- **Resolution trigger:** a `node-forge` release above 1.4.0 that fixes
+  GHSA-86w9-cpqp-85rv is published and reachable by the
+  `nuxt`/`nitropack`/`listhen` chain (directly or through a nitropack or
+  listhen release that drops or bumps it). Check `npm view node-forge
+  version` at each phase start and on every `nuxt` upgrade.
+- **Close when:** `npm audit` in `frontend/` reports 0 vulnerabilities
+  for that chain.
+
+---
+
 ## Closed items
+
+### 🟢 TD-003 · `zod` pinned to v3 due to `@vee-validate/zod` peer
+
+- **Source:** Task 1.4 (commit 2091253, 2026-04-23)
+- **Issue:** Installed `zod@^3.25.76` because `@vee-validate/zod@4.15.1`
+  requires `zod@^3.24.0`. Zod v4 was available but the peer range on the
+  adapter blocked it.
+- **Why it was open:** upgrade depended on `@vee-validate/zod`
+  publishing a release that accepts `zod@^4` (audited 2026-04-26: still
+  `{ zod: '^3.24.0' }`, latest `4.15.1`).
+- **Resolution trigger fired:** zod 3.x carries advisory
+  GHSA-mrhx-c7xc-m3w5, so the dependency-vulnerability remediation
+  required zod 4, and the operator decided explicitly to move to zod 4
+  without waiting for the adapter.
+- **Closed:** 2026-10-27 (the commit with trailer
+  `Work-Item: dependency-vulnerability-remediation`) --
+  close-when criterion met in substance: `zod@^4.6.7` is in
+  `frontend/package.json` and vitest passes (85/85, including 3 new
+  `loginSchema` cases). Resolution differs from the original plan:
+  `@vee-validate/zod` was REMOVED (it was never imported anywhere), so
+  `toTypedSchema` is no longer available. `vee-validate@4.15.1` has no
+  native Standard Schema support; the forms adapter (vee-validate 5,
+  Standard Schema native and currently beta, or another zod-4 adapter)
+  is decided when the first form is built. `vee-validate` itself stays
+  installed, still unused.
 
 ### 🟢 TD-005 · Transitive deprecation warnings in npm
 

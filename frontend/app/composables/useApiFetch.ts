@@ -109,7 +109,8 @@ export function useApiFetch<T>(
   // changes shape later.
   const baseURL = resolveApiBaseURL(import.meta.server, useRuntimeConfig().flaskUrl)
 
-  return useFetch<ApiResponse<T>, FetchError, string, 'get', ApiResponse<T>, T>(
+  // Generic slots (Nuxt >= 4.6): ResT, ErrorT, ReqT, Method, BaseURL, _ReqT, _ResT, DataT.
+  return useFetch<ApiResponse<T>, FetchError, string, 'get', string, string, ApiResponse<T>, T>(
     url,
     {
       baseURL,

@@ -163,6 +163,21 @@ npm test                       # vitest, one-shot
 npm run test:watch             # vitest, watch mode
 ```
 
+### Dependency audits
+
+```bash
+cd frontend && npm audit                         # npm advisories
+cd backend && venv/bin/pip-audit                 # Python advisories (install pip-audit in the venv first)
+cd backend && venv/bin/pip-audit -r requirements.txt   # what a fresh install would resolve
+```
+
+Use npm 11 for `npm audit fix` / `npm update` in `frontend/`: npm 10.9.3
+crashes there (`Cannot read properties of null (reading 'edgesOut')`,
+raised in arborist `#loadPeerSet`), triggered by the optional peer chain
+`@nuxt/test-utils` -> `jsdom` -> `canvas`. `npx -y npm@11.6.2 audit fix`
+works. The one open finding class, `node-forge` under `nuxt`, is tracked
+as TD-018 in `docs/TECH_DEBT.md`.
+
 ## Troubleshooting
 
 ### Port already in use

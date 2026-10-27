@@ -5,6 +5,60 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Dependency vulnerability remediation] -- 2026-10-27
+
+Pip and npm audits across the repository, then fixes verified against the
+test suites (backend pytest 46/46, frontend vitest 85/85, `tsc` for app and
+server clean, `nuxt build` ok, dev servers checked with a real browser and
+curl).
+
+### Security
+
+- Backend: `pip-audit` on `backend/venv` went from 116 distinct
+  vulnerabilities (18 packages) to 0; `requirements.txt` resolved fresh is
+  0. Floors raised in `backend/requirements.txt`: Flask>=3.1.3,
+  Werkzeug>=3.1.9, PyJWT>=2.15.0, Authlib>=1.6.12, requests>=2.33.0,
+  python-dotenv>=1.2.2, Pillow>=13.0.0, pytest>=9.0.3, black>=26.10.1.
+  protobuf stays below 7 because `google-api-core` requires `protobuf<7`.
+- Frontend: `npm audit` went from 81 findings (6 critical, 30 high, 41
+  moderate, 4 low) to 9 high with one root cause, `node-forge <=1.4.0`
+  (GHSA-86w9-cpqp-85rv) via `nuxt` -> `nitropack` -> `listhen`. No patched
+  release exists; not exploitable here (dev-only `--https` certificate
+  generation, absent from the production bundle). Tracked as TD-018.
+
+### Changed
+
+- `frontend/package.json`: `nuxt` ^4.6.3 (was ^4.4.2), `vitest` ^4.1.12,
+  `happy-dom` ^21.0.4 (major), `zod` ^4.6.7 (was ^3.25.76, major; fixes
+  GHSA-mrhx-c7xc-m3w5). Transitive: tiptap 3.32.0, `@nuxtjs/seo` 5.3.16,
+  `nuxt-og-image` 6.10.4, `@nuxt/test-utils` 4.3.4
+  (`frontend/.nuxtrc` setup version follows).
+- `frontend/app/composables/useApiFetch.ts`: `useFetch` generic slots
+  updated for Nuxt >= 4.6 (`BaseURL` and `_ReqT` were inserted).
+- `frontend/tests/unit/useApi.test.ts`: `$fetch` is mocked with
+  `vi.mock('#build/fetch')` because Nuxt >= 4.6 auto-imports it from there
+  instead of `globalThis`.
+- The Nuxt prerender crawler now also prerenders the `/it`, `/fr` and `/es`
+  variants.
+
+### Removed
+
+- `@vee-validate/zod` (never imported; its `zod@^3` peer blocked the zod 4
+  upgrade, decided explicitly by the operator). `toTypedSchema` is no
+  longer available; the forms adapter is chosen with the first form
+  (vee-validate 5 or another zod-4 adapter). `vee-validate` stays installed.
+
+### Added
+
+- 3 `loginSchema` cases in `frontend/tests/unit/login-handler.test.ts`
+  (real zod parser).
+- `docs/deployment/development.md` "Dependency audits": audit commands and
+  the npm 10.9.3 `edgesOut` crash (use npm 11.6.2 for `audit fix`).
+
+### Closed
+
+- **TD-003**: zod pin lifted (zod 4 adopted, adapter removed).
+
 ## [Tech debt sweep -- post-Phase-7] -- 2026-04-26
 
 Proactive sweep through the open TECH_DEBT register following the user

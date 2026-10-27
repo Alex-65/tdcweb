@@ -98,7 +98,7 @@ frontend/
 | Image | `@nuxt/image` → `<NuxtImg>` |
 | Icons | `lucide-vue-next` (named imports only, tree-shaken) |
 | Rich text | `@tiptap/vue-3` (admin-only, client-only) |
-| Forms | vee-validate + zod via `toTypedSchema` |
+| Forms | vee-validate + zod 4 (no `@vee-validate/zod`; adapter chosen with the first form, playbook §17.1) |
 | Utilities | `@vueuse/nuxt` |
 | Unit tests | vitest + `@nuxt/test-utils`, `happy-dom` env |
 | Browser checks | Playwright MCP against the running dev app (CLAUDE.md: 1920x1080 always); `@playwright/test` is installed but there is no config or E2E suite |
@@ -363,11 +363,12 @@ export function useMyAnimation() {
 ```vue
 <script setup lang="ts">
 import { z } from 'zod'
-import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
-const schema = toTypedSchema(z.object({
-  email: z.string().email('Invalid email'),
+// zod 4; `@vee-validate/zod` is removed, so `bridgeSchema` is a placeholder for the
+// adapter chosen with the first form (playbook §17.1).
+const schema = bridgeSchema(z.object({
+  email: z.email('Invalid email'),
   password: z.string().min(8, 'Minimum 8 characters'),
 }))
 
