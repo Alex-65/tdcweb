@@ -366,7 +366,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 | **i18n** | `@nuxtjs/i18n` — `prefix_except_default`, EN default, `/it/ /fr/ /es/` |
 | **SEO** | `@nuxtjs/seo` + `@nuxtjs/sitemap` + `@nuxtjs/robots` (useSeoMeta, useSchemaOrg) |
 | **Image** | `@nuxt/image` (`<NuxtImg>`, auto avif/webp) |
-| **Forms** | vee-validate + zod (same schema client+server via `readValidatedBody`) |
+| **Forms** | vee-validate + zod 4 (same schema client+server via `readValidatedBody`; no `@vee-validate/zod` adapter, the client adapter is chosen with the first form) |
 | **Rich text** | `@tiptap/vue-3` (admin-only, `<ClientOnly>`-wrapped) |
 | **Auth transport** | **JWT HttpOnly cookies** (`tdc_access` 15min Lax, `tdc_refresh` 7d Strict Path=/api/auth, rotated on use) |
 | **Auth emit** | Flask + JWT + OAuth2 (Google, Discord, Facebook) |

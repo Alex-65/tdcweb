@@ -1779,15 +1779,24 @@ Providers are configurable (default: built-in IPX). For external CDN, configure 
 
 ### 17.1 Canonical form
 
+> **Status (2026-10-27):** the project is on `zod@^4` and
+> `@vee-validate/zod` was removed (it was never imported; its peer
+> `zod@^3` blocked the security upgrade, see TD-003 in
+> `docs/TECH_DEBT.md`). `vee-validate@4.15.1` has no native Standard
+> Schema support, so `toTypedSchema` does not exist in the project. The
+> schema-to-`useForm` bridge is decided when the first form is built
+> (vee-validate 5, Standard Schema native and currently beta, or another
+> zod-4 adapter). The example shows the form structure; the
+> `bridgeSchema` line is a placeholder for that bridge, not an API.
+
 ```vue
 <script setup lang="ts">
 import { z } from 'zod'
-import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
-const schema = toTypedSchema(
+const schema = bridgeSchema( // placeholder: adapter chosen with the first form
   z.object({
-    email: z.string().email('Invalid email'),
+    email: z.email('Invalid email'),
     password: z.string().min(8, 'Minimum 8 characters'),
     rememberMe: z.boolean().default(false),
   }),
@@ -1850,7 +1859,7 @@ const onSubmit = handleSubmit(async (values) => {
 
 ### 17.2 Why zod
 
-The same schema validates on Flask-side (if Flask uses a matching JSON schema) AND the Nuxt BFF server routes use it via `readValidatedBody`. One source of truth for client UX + server enforcement.
+The same schema validates on Flask-side (if Flask uses a matching JSON schema) AND the Nuxt BFF server routes use it via `readValidatedBody` (live today: `server/api/auth/login.post.ts` with `loginSchema`, covered by the real-parser cases in `tests/unit/login-handler.test.ts`). One source of truth for client UX + server enforcement. The project runs zod 4, where `z.email()` is the top-level form of `z.string().email()` (the latter still works but is deprecated).
 
 ### 17.3 Complex forms
 
@@ -2058,7 +2067,7 @@ Phase 4 produced four concrete instances:
 
 | File | Pure helper(s) | Test file |
 |---|---|---|
-| `app/composables/useApi.ts` | `RetryableFetchOptions` typed shape | `tests/unit/useApi.test.ts` (4 cases) |
+| `app/composables/useApi.ts` | `RetryableFetchOptions` typed shape | `tests/unit/useApi.test.ts` (4 cases; mocks `$fetch` via `vi.mock('#build/fetch')`, because Nuxt >= 4.6 auto-imports it from there instead of `globalThis`) |
 | `app/composables/useApiFetch.ts` | `unwrapEnvelope<T>`, `resolveApiBaseURL(isServer, flaskUrl)` | `tests/unit/useApiFetch.test.ts` (12 cases) |
 | `app/composables/useAuth.ts` | `buildAuthOps(store, fetcher)` | `tests/unit/useAuth.test.ts` |
 | `app/utils/auth-guard.ts` | `buildLoginRedirect`, `decideAuthOutcome`, `decideAdminOutcome`, `decideStaffOutcome` | `tests/unit/auth-guard.test.ts` |

@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { FetchContext } from 'ofetch'
 
-const createMock = vi.fn()
-;(globalThis as unknown as { $fetch: { create: typeof createMock } }).$fetch = { create: createMock }
+// Nuxt auto-imports `$fetch` from `#build/fetch` (not the global), so the
+// mock replaces that module. `callMock` is the plain `$fetch(url)` call;
+// each test sets its implementation.
+const { createMock, callMock } = vi.hoisted(() => ({ createMock: vi.fn(), callMock: vi.fn() }))
+vi.mock('#build/fetch', () => ({
+  $fetch: Object.assign((url: string) => callMock(url), { create: createMock }),
+}))
 
 import { useApi, type RetryableFetchOptions } from '../../app/composables/useApi'
 
@@ -10,6 +15,7 @@ describe('useApi', () => {
   beforeEach(() => {
     createMock.mockReset()
     createMock.mockReturnValue(vi.fn())
+    callMock.mockReset()
   })
 
   it('creates a $fetch instance with credentials: include', () => {
@@ -30,9 +36,8 @@ describe('useApi', () => {
   it('onResponseError triggers refresh and retries once on 401', async () => {
     const refreshFetch = vi.fn().mockResolvedValue({})
     const retriedFetch = vi.fn().mockResolvedValue({ ok: true })
-    ;(globalThis as unknown as { $fetch: unknown }).$fetch = Object.assign(
+    callMock.mockImplementation(
       (url: string) => url === '/api/auth/refresh' ? refreshFetch(url) : retriedFetch(url),
-      { create: createMock },
     )
 
     useApi()
@@ -51,10 +56,7 @@ describe('useApi', () => {
 
   it('onResponseError does NOT retry when already retried', async () => {
     const refreshFetch = vi.fn()
-    ;(globalThis as unknown as { $fetch: unknown }).$fetch = Object.assign(
-      () => refreshFetch(),
-      { create: createMock },
-    )
+    callMock.mockImplementation(() => refreshFetch())
 
     useApi()
     const opts = createMock.mock.calls[0]![0]

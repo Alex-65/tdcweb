@@ -69,4 +69,40 @@ describe('POST /api/auth/login', () => {
 
     await expect(loginHandler(event)).rejects.toThrow()
   })
+
+  describe('loginSchema (real zod parser)', () => {
+    const runWithBody = (body: unknown) =>
+      readValidatedBodyMock.mockImplementation(async (_event, parser: (i: unknown) => unknown) =>
+        parser(body),
+      )
+
+    it('accepts a valid body and forwards it to Flask', async () => {
+      runWithBody({ email: 'a@b.co', password: 'pw' })
+      flaskFetchMock.mockResolvedValue({
+        success: true,
+        data: { access: 'acc', refresh: 'ref', user: { id: 1, email: 'a@b.co', username: 'u', role: 'user' } },
+      })
+
+      await loginHandler({} as H3Event)
+
+      expect(flaskFetchMock).toHaveBeenCalledWith('/api/auth/login', expect.anything(), {
+        method: 'POST',
+        body: { email: 'a@b.co', password: 'pw' },
+      })
+    })
+
+    it('rejects a malformed email without calling Flask', async () => {
+      runWithBody({ email: 'not-an-email', password: 'pw' })
+
+      await expect(loginHandler({} as H3Event)).rejects.toThrow()
+      expect(flaskFetchMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects an empty password without calling Flask', async () => {
+      runWithBody({ email: 'a@b.co', password: '' })
+
+      await expect(loginHandler({} as H3Event)).rejects.toThrow()
+      expect(flaskFetchMock).not.toHaveBeenCalled()
+    })
+  })
 })

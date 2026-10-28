@@ -176,7 +176,7 @@ and admin endpoints — ships alongside the features that define them.
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 20+ (Nuxt 4 minimum)
+- Node.js `^22.22.3 || ^24.15.0` (Nuxt >= 4.6 minimum)
 - MySQL 8.x
 - Redis (Celery)
 

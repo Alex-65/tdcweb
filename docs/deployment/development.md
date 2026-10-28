@@ -5,7 +5,7 @@ Local setup for the TDC Nuxt 4 + Flask stack.
 ## Prerequisites
 
 - **Python 3.11+** — Flask backend
-- **Node.js 20+** — Nuxt 4 minimum runtime
+- **Node.js `^22.22.3 || ^24.15.0`** — required by Nuxt >= 4.6 (`engines.node`); the dev host uses the nvm default (22.x)
 - **MySQL 8.x** — primary database
 - **Redis** — Celery broker + ISR cache (later phases)
 - **Git**
@@ -162,6 +162,26 @@ npm run generate               # Static site generate (SSG only)
 npm test                       # vitest, one-shot
 npm run test:watch             # vitest, watch mode
 ```
+
+### Dependency audits
+
+Run from the repository root (each line is independent):
+
+```bash
+(cd frontend && npm audit)                                # npm advisories
+(cd backend && venv/bin/pip-audit)                        # Python advisories (install pip-audit in the venv first)
+(cd backend && venv/bin/pip-audit -r requirements.txt)    # what a fresh install would resolve
+```
+
+Use npm 11 for `npm audit fix` / `npm update` in `frontend/`: npm 10
+(10.9.3 and 10.9.9 measured) crashes there (`Cannot read properties of null
+(reading 'edgesOut')`, raised in arborist `#loadPeerSet`), triggered by the
+optional peer chain `@nuxt/test-utils` -> `jsdom` -> `canvas`.
+`npx -y npm@11.6.2 audit fix` works. Afterwards run a plain `npm install`
+with the default npm 10: a lockfile written by npm 11 can omit entries npm 10
+requires, and `npm ci` (the deploy path) then fails with `EUSAGE ... Missing:
+... from lock file`. Check with `npm ci --dry-run --ignore-scripts`. The one open finding class, `node-forge` under `nuxt`, is tracked
+as TD-018 in `docs/TECH_DEBT.md`.
 
 ## Troubleshooting
 

@@ -36,7 +36,7 @@ Use this skill when:
 | i18n | `@nuxtjs/i18n` | `prefix_except_default` -- EN at `/`, others at `/it/`, `/fr/`, `/es/` |
 | SEO | `@nuxtjs/seo` + `@nuxtjs/sitemap` + `@nuxtjs/robots` | `useSeoMeta`, `useSchemaOrg` |
 | Image | `@nuxt/image` | `<NuxtImg>` (auto avif/webp) |
-| Forms | vee-validate + zod via `toTypedSchema` | Same schema reused server-side via `readValidatedBody` |
+| Forms | vee-validate + zod 4 (no `@vee-validate/zod`; adapter chosen with the first form, see playbook §17) | Same schema reused server-side via `readValidatedBody` |
 | Rich text | `@tiptap/vue-3` | Admin-only, `<ClientOnly>`-wrapped |
 | Testing | vitest + `@nuxt/test-utils` + happy-dom (unit) | Playwright 1920x1080 (E2E) |
 
@@ -328,14 +328,17 @@ auth.clear()                                          // actions: not refs
 
 Same zod schema can be reused server-side via `readValidatedBody`.
 
+> The project is on zod 4 and `@vee-validate/zod` was removed, so
+> `toTypedSchema` is unavailable; `bridgeSchema` below is a placeholder for
+> the bridge chosen with the first form (playbook §17.1, TD-003 closure).
+
 ```vue
 <script setup lang="ts">
 import { z } from 'zod'
-import { toTypedSchema } from '@vee-validate/zod'
 import { useForm } from 'vee-validate'
 
-const schema = toTypedSchema(z.object({
-  email: z.string().email('Invalid email'),
+const schema = bridgeSchema(z.object({ // placeholder, see note above
+  email: z.email('Invalid email'),
   password: z.string().min(8, 'Min 8 characters'),
 }))
 

@@ -63,7 +63,7 @@ This PDP drives the public website that:
 | Image | `@nuxt/image` (`<NuxtImg>` auto avif/webp) | |
 | Icons | `lucide-vue-next` — named imports only | |
 | Rich text | `@tiptap/vue-3` | Admin only, `<ClientOnly>`-wrapped |
-| Forms | `vee-validate` + `zod` via `toTypedSchema` | Same schema client + server (`readValidatedBody`) |
+| Forms | `vee-validate` + `zod` 4 (adapter choice open; see TD-003 closure) | Same schema client + server (`readValidatedBody`). `@vee-validate/zod` / `toTypedSchema` removed with the zod 4 upgrade |
 | Utilities | `@vueuse/nuxt` | |
 
 ### 2.3 Authentication transport
