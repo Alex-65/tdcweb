@@ -508,7 +508,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ├── apache/                      # Production Apache vhost config (Phase 6)
 │
 ├── .claude/
-│   ├── agents/                  # 27 specialized agents (tdc-*)
+│   ├── agents/                  # 26 specialized agents (tdc-*)
 │   └── skills/                  # CLI skills (tdc-docs, tdc-backend, tdc-frontend, tdc-database, tdc-testing)
 │
 ├── CHANGELOG.md

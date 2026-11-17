@@ -85,7 +85,7 @@ tdcweb/
 │
 ├── apache/                   # Production Apache vhost config (Phase 6)
 ├── .claude/
-│   ├── agents/               # 27 domain agents (tdc-*)
+│   ├── agents/               # 26 domain agents (tdc-*)
 │   └── skills/               # CLI skills (tdc-docs, tdc-backend, etc.)
 ├── dev.sh                    # Unified dev-server manager
 ├── CLAUDE.md                 # AI assistant project law

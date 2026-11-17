@@ -380,15 +380,15 @@ Feature areas (each will become one or more spec + plan pairs under `docs/superp
 
 ## 8. Agents and workflow
 
-TDC uses a 27-agent ecosystem (see `CLAUDE.md` §Intelligent Agent System) grouped into:
+TDC uses a 26-agent ecosystem (see `CLAUDE.md` §Intelligent Agent System) grouped into:
 - **Core development** (7): database, API, frontend, backend, auth, integration, documentation experts
-- **Review Guardians** (3): `tdc-code-reviewer`, `tdc-design-enforcer`, `tdc-design-system-enforcer` — enforce CLAUDE.md rules 15–18 (per-task + phase-end review, docs sync, tech-debt discipline)
+- **Review Guardians** (2): `tdc-code-reviewer`, `tdc-design-enforcer` (the UI design eye, formerly `tdc-design-system-enforcer`; the design-specification author that held the name was removed on 2026-11-17, work item `design-enforcer-rename`) — enforce CLAUDE.md rules 15–18 (per-task + phase-end review, docs sync, tech-debt discipline)
 - **Testing & Quality** (5): testing-expert + visual / E2E / browser-performance / accessibility testers
 - **Specialized Support** (6): security, performance, UX, network, troubleshooting, problem-isolator
 - **Coordination** (2): orchestrator, problem-isolator
 - **Advisory System** (5): architecture / security / performance / risk / coordinator — for complex decision resolution
 
-Development cadence, per CLAUDE.md rule 16: **phase-end commit protocol** — working tree accumulates per-task work (no per-task commits); at phase boundary we run triple review (code-reviewer + design-system-enforcer), real tests (E2E / build / security), state cleanup, documentation sync (`tdc-documentation-expert`), then atomic commit(s) of code + docs together.
+Development cadence, per CLAUDE.md rule 16: **phase-end commit protocol** — working tree accumulates per-task work (no per-task commits); at phase boundary we run triple review (code-reviewer + design-enforcer), real tests (E2E / build / security), state cleanup, documentation sync (`tdc-documentation-expert`), then atomic commit(s) of code + docs together.
 
 ---
 

@@ -181,7 +181,7 @@ buffer for deferred work.
   full per-location palettes with contrast verification, motion tokens)
   that haven't been made yet. Premature consolidation risks locking in
   placeholders.
-- **Impact:** medium. `tdc-design-system-enforcer` has to re-read
+- **Impact:** medium. `tdc-design-enforcer` has to re-read
   fragmented sources every review. A consolidated doc would be faster
   and clearer. Gap scales as the project grows.
 - **Resolution trigger:** by end of Phase 4 implementation, enough UI
