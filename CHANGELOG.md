@@ -5,6 +5,22 @@ All notable changes to The Dreamer's Cave website project will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [One design agent: the UI design eye is tdc-design-enforcer] -- 2026-11-17
+
+Work item `design-enforcer-rename`.
+
+### Changed
+- `tdc-design-enforcer` is the read-only UI/UX design eye: the contract formerly named
+  `tdc-design-system-enforcer` keeps its content under the new name, on both harnesses. Every
+  route, the review-eye boundary pin and `.fleet/project.yaml` follow it.
+- Design specifications: a product decision that needs a design specification goes to the
+  operator, and the specification is written through Superpowers brainstorming (`CLAUDE.md`,
+  orchestrator and advisory contracts).
+
+### Removed
+- The design-specification author formerly named `tdc-design-enforcer`, with its Codex twin.
+  `tdc-design-system-enforcer` no longer exists.
+
 ## [Dependency vulnerability remediation] -- 2026-10-27
 
 Pip and npm audits across the repository, then fixes verified against the

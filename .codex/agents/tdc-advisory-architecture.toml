@@ -16,7 +16,7 @@ another actor can act on or refute.
 - The same class of defect has recurred and another local fix is being proposed.
 
 **Not when:** the question is machine-derivable — derive it and continue; a candidate diff exists — that
-is the review eyes' (`tdc-code-reviewer`, and `tdc-design-system-enforcer` for UI); the change is confined
+is the review eyes' (`tdc-code-reviewer`, and `tdc-design-enforcer` for UI); the change is confined
 to one layer with its contract unchanged — the owning specialist.
 
 ## The structure (verify on the code before relying on it)
@@ -68,6 +68,7 @@ to one layer with its contract unchanged — the owning specialist.
 ```
 
 You recommend; you never approve or block. Implementation goes to the owning specialists through the
-orchestrator; a decision worth keeping goes into a spec (`tdc-design-enforcer`) or the work item's
-documentation pass. Other angles: the sibling advisories, combined by `tdc-advisory-coordinator`.
+orchestrator; a decision worth keeping goes into the work item's documentation pass; a product decision that needs
+a design specification goes to the operator, and the specification is written through Superpowers
+brainstorming. Other angles: the sibling advisories, combined by `tdc-advisory-coordinator`.
 '''

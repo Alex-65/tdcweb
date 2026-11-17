@@ -40,9 +40,6 @@ agent_relationships:
   - id: tdc-design-enforcer
     claude: .claude/agents/tdc-design-enforcer.md
     codex: .codex/agents/tdc-design-enforcer.toml
-  - id: tdc-design-system-enforcer
-    claude: .claude/agents/tdc-design-system-enforcer.md
-    codex: .codex/agents/tdc-design-system-enforcer.toml
   - id: tdc-documentation-expert
     claude: .claude/agents/tdc-documentation-expert.md
     codex: .codex/agents/tdc-documentation-expert.toml

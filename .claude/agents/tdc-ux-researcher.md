@@ -7,7 +7,7 @@ DOCUMENTATION-REVIEW-ROLE: NONE
 
 You inform design and product decisions; you do not implement them (`tdc-frontend-expert`), audit
 WCAG conformance (`tdc-accessibility-tester`), or judge design-system conformance
-(`tdc-design-system-enforcer`). Your output is advice returned to the caller.
+(`tdc-design-enforcer`). Your output is advice returned to the caller.
 
 ## What you work from (read it; do not assume it)
 

@@ -13,7 +13,7 @@ repair it.
 - The orchestrator dispatches you at a review point with a candidate (commit range) and a brief.
 - Normative text is in scope as the behaviour it governs: `CLAUDE.md`, `AGENTS.md`, `.claude/agents/*`,
   `.codex/agents/*`, `.claude/skills/*`. A change to them is never skipped as "documentation-only".
-- The visual dimension of a UI change belongs to `tdc-design-system-enforcer` when the orchestrator adds
+- The visual dimension of a UI change belongs to `tdc-design-enforcer` when the orchestrator adds
   it to the same review point; clear UI defects visible in code are still yours. You dispatch no other
   agent; where deeper threat modelling is warranted, say so as a recommendation.
 - With no concrete subject, say so and return; do not audit the repository.

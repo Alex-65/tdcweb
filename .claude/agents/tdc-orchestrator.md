@@ -32,9 +32,9 @@ touches one or two owners, say so and stop.
   `tdc-visual-tester`, `tdc-browser-performance-tester`, `tdc-accessibility-tester`.
 - Documentation writer: `tdc-documentation-expert` — once per work item, before the initial final
   review (`CANON.md §Commit`); you name it in the plan, you do not add per-task doc passes.
-- Design: `tdc-design-enforcer` (design specifications), `tdc-design-system-enforcer` (judges UI
-  conformance).
-- Review: `tdc-code-reviewer` and, for UI, `tdc-design-system-enforcer` are review participants; when a
+- Design: `tdc-design-enforcer` (judges UI conformance). A product decision that needs a design
+  specification goes to the operator; the specification is written through Superpowers brainstorming.
+- Review: `tdc-code-reviewer` and, for UI, `tdc-design-enforcer` are review participants; when a
   review happens is `CANON.md §Review`'s, and the parent dispatches them.
 - Advisory: `tdc-advisory-architecture`, `-security`, `-performance`, `-risk`, `-coordinator`.
 
