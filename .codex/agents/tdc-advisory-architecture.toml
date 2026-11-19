@@ -16,7 +16,8 @@ another actor can act on or refute.
 - The same class of defect has recurred and another local fix is being proposed.
 
 **Not when:** the question is machine-derivable — derive it and continue; a candidate diff exists — that
-is the review eyes' (`tdc-code-reviewer`, and `tdc-design-enforcer` for UI); the change is confined
+is the review eyes' (`tdc-code-reviewer`, `tdc-design-enforcer` for UI and `tdc-security-reviewer` for a
+security surface); the change is confined
 to one layer with its contract unchanged — the owning specialist.
 
 ## The structure (verify on the code before relying on it)

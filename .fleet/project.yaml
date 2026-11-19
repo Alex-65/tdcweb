@@ -67,6 +67,9 @@ agent_relationships:
   - id: tdc-security-expert
     claude: .claude/agents/tdc-security-expert.md
     codex: .codex/agents/tdc-security-expert.toml
+  - id: tdc-security-reviewer
+    claude: .claude/agents/tdc-security-reviewer.md
+    codex: .codex/agents/tdc-security-reviewer.toml
   - id: tdc-testing-expert
     claude: .claude/agents/tdc-testing-expert.md
     codex: .codex/agents/tdc-testing-expert.toml

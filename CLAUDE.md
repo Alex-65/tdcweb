@@ -15,8 +15,8 @@
 12. **ID ORDERING GOLDEN RULE** → When ordering by database ID: (1) SELECT include `id` field, (2) SQL `ORDER BY id`, (3) Pass numeric ID in JSON, (4) Frontend `.sort((a,b) => a.id - b.id)`. NEVER rely on Object.entries() order or parseInt() tricks
 13. **BROWSER TESTING: Playwright MCP** → Use `mcp__plugin_playwright_playwright__*` tools for browser testing, screenshots, and UI validation
 14. **BROWSER RESOLUTION: 1920x1080 ALWAYS** → Set desktop resolution 1920x1080 before any browser test
-15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run the minimum verification sufficient to prove the changed property (backend pytest + frontend vitest + integration where relevant), widened only where a shared contract or an uncertain reach requires it, reusing evidence that is still valid instead of re-running it; (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-enforcer`** ALSO covers visual compliance. Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of reconciling documentation once per work item, not per commit.
-16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user intent per rule 19** — carry every uncodified user decision the review must verify into the review brief BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (one review: requirement compliance and code quality) and `tdc-design-enforcer` (for UI changes); (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`**, once per work item and BEFORE the initial final review in (a), analyzes the work item's cumulative git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed in one or a few logically-grouped commits; the docs come from the work item's single reconciliation pass, and a docs-only commit for that pass is allowed. **Design specs:** a product decision that needs a design specification goes to the operator; the specification is written through Superpowers brainstorming under `docs/superpowers/specs/`.
+15. **SUBAGENT TASK WORKFLOW** → For each change: (a) run the minimum verification sufficient to prove the changed property (backend pytest + frontend vitest + integration where relevant), widened only where a shared contract or an uncertain reach requires it, reusing evidence that is still valid instead of re-running it; (b) CREATE missing tests for the code just produced (both backend and frontend sides). When a review is due (`~/.canon/CANON.md` governs when), **`tdc-code-reviewer`** covers spec + code quality review; if the change modified UI, **`tdc-design-enforcer`** ALSO covers visual compliance; if the review subject touches a security surface **`tdc-security-reviewer`** names, it ALSO judges the security dimension (§ Review & Design Specialists). Implementer subagents must NOT commit; the controller handles commits. This aligns with the user's practice of reconciling documentation once per work item, not per commit.
+16. **REVIEW, REAL TESTS, DOCS AND COMMIT** → `~/.canon/CANON.md` governs when review happens and when a commit is made. The TDC surfaces: **(a0) user intent per rule 19** — carry every uncodified user decision the review must verify into the review brief BEFORE reviewing; (a) **review** — `tdc-code-reviewer` (one review: requirement compliance and code quality) and `tdc-design-enforcer` (for UI changes), plus `tdc-security-reviewer` when the review subject touches one of its security surfaces; (b) **real tests** (E2E, integration, performance — not only smoke tests); (c) **state cleanup** — if tests dirtied DB/filesystem/external services, restore; (d) **`tdc-documentation-expert`**, once per work item and BEFORE the initial final review in (a), analyzes the work item's cumulative git diff and updates ALL impacted docs (CLAUDE.md, TECH_DEBT, playbook, specs, plans, API refs, CHANGELOG, agent inventories, etc. — creating missing docs where needed); (e) **atomic commit(s)** — code + docs committed in one or a few logically-grouped commits; the docs come from the work item's single reconciliation pass, and a docs-only commit for that pass is allowed. **Design specs:** a product decision that needs a design specification goes to the operator; the specification is written through Superpowers brainstorming under `docs/superpowers/specs/`.
 17. **TEST STATE CLEANUP** → Any test that mutates persistent state (DB rows, files, external API objects) MUST restore the pre-test state upon completion. No test residue allowed between runs. If a test crashes mid-run, the next step is always: clean up first, then investigate.
 18. **TECH DEBT REGISTER** → `docs/TECH_DEBT.md` is the single source of truth for items that can't be fixed immediately. **Fix-now-if-possible is the default** — this file is a last resort, not a buffer. Every entry has: source (phase/task/commit), issue, why-it's-open, impact, **resolution trigger** (specific condition), and close-when criterion. Review at phase start AND during review (rule 16). Items sitting open for 3+ phases without their trigger firing get re-evaluated (escalate-to-fix or WONTFIX with explicit reasoning). Never let this file become a dumping ground.
 19. **USER INTENT CODIFICATION** → Reviewers check the implementation against the requirements actually given — the request and the review brief, plus `docs/superpowers/specs/`, `docs/superpowers/plans/` and `docs/plans/pdp-v3.md` where they exist and govern the work — and do NOT infer requirements from conversation history. Therefore, before a review (rule 16 step a0), the controller carries every user decision, request or scope change from the session that the review must verify into the review brief. Only a decision that needs a durable owner is also written down: an explicit plan task, or a TECH_DEBT entry with a resolution trigger when it is deferred. No separate scan artifact is written.
@@ -117,7 +117,8 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │     ├─ Integration tests for cross-layer code                    │
 │                                                                  │
 │  5. WHEN DUE, tdc-code-reviewer (and tdc-design-enforcer         │
-│     if UI changes). Fix issues before proceeding.                │
+│     if UI changes, tdc-security-reviewer if a security           │
+│     surface). Fix issues before proceeding.                      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -134,6 +135,11 @@ Essential guidance for Claude Code when working with The Dreamer's Cave website 
 │     └─ Visual compliance for UI changes in the review subject    │
 │        (dark theme, location CSS vars, Tailwind tokens, GSAP     │
 │        discipline, typography, spacing)                          │
+│                                                                  │
+│  B2. SECURITY REVIEW (via tdc-security-reviewer)                 │
+│     └─ When the review subject touches a security surface it     │
+│        names: dispatched automatically, beside the two eyes,     │
+│        on both harnesses; otherwise NOT APPLICABLE               │
 │                                                                  │
 │  C. REAL TESTS (not just smoke tests)                            │
 │     ├─ Full E2E journeys (Playwright, 1920x1080)                 │
@@ -265,7 +271,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 
 **IRON RULE**: *When in doubt, use expert diretti. Transparency > automation.*
 
-## 🤖 INTELLIGENT AGENT SYSTEM (26 Agents)
+## 🤖 INTELLIGENT AGENT SYSTEM (27 Agents)
 
 ### 🎯 USAGE PATTERNS
 
@@ -319,10 +325,13 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 - **tdc-troubleshooting-expert**: Debugging, log analysis
 - **tdc-problem-isolator**: Problem mapping and scope isolation
 
-### 🛡️ Review & Design Specialists (2)
+### 🛡️ Review & Design Specialists (3)
 **`~/.canon/CANON.md` governs when review happens.**
 - **tdc-code-reviewer**: The general review eye at a canon review point, on either harness: one review covering requirement compliance and implementation quality (security, TDC conventions, verification evidence).
 - **tdc-design-enforcer**: Visual compliance for UI changes. Enforces TDC visual identity (dark theme, per-location CSS vars, mood palettes, Inter typography, GSAP discipline, Tailwind tokens).
+- **tdc-security-reviewer**: Security review participant at a review point whose subject touches tdcweb's security surfaces (Flask JWT issuance and the role decorators, the BFF cookie transport and its SameSite-only CSRF posture, secrets at boot and the runtime-config split, the admin-gated revalidate endpoint and the shared SSR cache, the Apache/Nitro proxy split with CORS and headers, debug and bind exposure, secret egress through logs and responses, public read routes, dependency floors); read-only, never implements.
+
+When the reviewed subject touches one of the security surfaces `tdc-security-reviewer` names, the orchestrator dispatches it automatically at that review point, beside the two eyes, on both harnesses (Claude and Codex, whichever orchestrates), without asking the operator first; otherwise security review is NOT APPLICABLE beyond what the two eyes already cover. **tdc-security-expert** (with **tdc-auth-expert** for the auth model) implements and fixes security code by task shape, while **tdc-security-reviewer** only judges a review subject's security dimension at a review point and never implements; **tdc-advisory-security** advises on a proposal before a diff exists and is not a review eye.
 
 ### 🧠 Coordination (2)
 - **tdc-orchestrator**: Planner for workflows needing 10+ parallel agents: returns a dispatch plan and per-specialist briefs for the calling session to launch; launches no agent
@@ -508,7 +517,7 @@ FASE 3: Task(tdc-frontend-expert, "add GSAP animations") → Test → Stop
 ├── apache/                      # Production Apache vhost config (Phase 6)
 │
 ├── .claude/
-│   ├── agents/                  # 26 specialized agents (tdc-*)
+│   ├── agents/                  # 27 specialized agents (tdc-*)
 │   └── skills/                  # CLI skills (tdc-docs, tdc-backend, tdc-frontend, tdc-database, tdc-testing)
 │
 ├── CHANGELOG.md

@@ -8,6 +8,9 @@ DOCUMENTATION-REVIEW-ROLE: NONE
 You are dispatched for security analysis or hardening of a tdcweb change or surface. You are not a
 review eye and you open, replace or close no review point: when a review happens and who the eyes are
 is `CANON.md §Review`'s, and `tdc-code-reviewer` still reports clear security defects on its own.
+When the review subject touches a security surface, `tdc-security-reviewer` judges its security
+dimension at the review point, beside the two eyes on both harnesses; you are not that reviewer: it
+judges, you implement.
 Implementation of authentication features is `tdc-auth-expert`'s; you assess it and may harden it
 when asked.
 

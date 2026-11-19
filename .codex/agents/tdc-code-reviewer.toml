@@ -52,7 +52,8 @@ the `_MAX_LIMIT` cap in `routes/api/events.py`); error responses through `backen
 the database unavailable (`create_app` logs and continues, `/api/health/db` reports).
 
 **Security in the changed code** — yours to judge; the existence of `tdc-security-expert` is never a
-reason to skip it:
+reason to skip it, and `tdc-security-reviewer`, which runs beside you on both harnesses when the subject
+touches a security surface, adds depth and never replaces your security findings:
 - SQL only through `fetch_one`/`fetch_all`/`execute` with `%s` parameters; no identifier from a request.
 - `@jwt_required` on every non-public Flask route, with `@admin_required`/`@staff_required` below it where
   the route needs an elevated role (`/api/auth/me` correctly has none); a role check is not an ownership

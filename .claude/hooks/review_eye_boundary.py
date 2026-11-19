@@ -171,7 +171,7 @@ EYE_TOOLS = READ_ONLY_TOOLS | {BASH_TOOL}
 #: The contracts pinned as review eyes. A contract named here that no longer
 #: declares REVIEW_EYE is refused by `check`: leaving the class is a recorded
 #: decision in this set, never a one-line edit elsewhere.
-EXPECTED_EYES = frozenset({"tdc-code-reviewer", "tdc-design-enforcer"})
+EXPECTED_EYES = frozenset({"tdc-code-reviewer", "tdc-design-enforcer", "tdc-security-reviewer"})
 #: WHERE THIS FILE SITS DECIDES THE PROJECT IT SERVES. In this repository it is
 #: `tools/review_eye_boundary.py`; in a Fleet-managed project
 #: `tools/review_eye_boundary_render.py` materializes it at

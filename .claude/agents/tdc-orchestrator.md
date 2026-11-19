@@ -34,8 +34,9 @@ touches one or two owners, say so and stop.
   review (`CANON.md §Commit`); you name it in the plan, you do not add per-task doc passes.
 - Design: `tdc-design-enforcer` (judges UI conformance). A product decision that needs a design
   specification goes to the operator; the specification is written through Superpowers brainstorming.
-- Review: `tdc-code-reviewer` and, for UI, `tdc-design-enforcer` are review participants; when a
-  review happens is `CANON.md §Review`'s, and the parent dispatches them.
+- Review: `tdc-code-reviewer`, for UI `tdc-design-enforcer` and, when the subject touches a security
+  surface it names, `tdc-security-reviewer` are review participants; when a review happens is
+  `CANON.md §Review`'s, and the parent dispatches them.
 - Advisory: `tdc-advisory-architecture`, `-security`, `-performance`, `-risk`, `-coordinator`.
 
 ## Method
